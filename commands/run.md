@@ -20,10 +20,12 @@ self-correcting loop with **exactly two human gates** (⏸ G and ⏸ H).
 > Never pause mid-loop to ask "should I continue?" — the answer is always yes until A2's
 > confirmation, a ⏸ gate, or a genuine blocker (an honest, retried gate failure) is reached.
 
-> Keep a task list mirroring the state machine below. Track which requirements are met. Do not
-> declare "done" until the final user approval (Phase I). If a gate's feedback asks for changes,
-> re-enter the loop — never skip back to the end. The one thing you never do unattended is an
-> outward-facing action (push / PR / send).
+> Keep a task list mirroring the state machine below, but the **authoritative state is the run
+> ledger** (`docs/plans/<date>-run-ledger.md`), not memory — read it on entry and after a
+> compaction/resume so the loop never loses which requirements are met, which iteration it's in,
+> or what was tried. Do not declare "done" until the final user approval (Phase I). If a gate's
+> feedback asks for changes, amend the charter and re-enter the loop — never skip to the end. The
+> one thing you never do unattended is an outward-facing action (push / PR / send).
 
 ## The state machine
 
@@ -65,31 +67,36 @@ explicitly) · `[inferred]` (you concluded it after careful consideration). The 
 and the `acceptance-reviewer` (Phase F) run against. **Confirm the charter with the user**,
 fold in corrections — then proceed; this is the last interaction until ⏸ G.
 
-## B — Brainstorm
-`/oneshot-poc:brainstorm` on the hardest parts: 2–4 approaches, each with a real citation or
-the verbatim "No source found — this is an AI-generated idea." Pick one; note the trade-off.
+## B–F — Autonomous build loop (run it as the Workflow engine)
+The whole build loop runs as the bundled **deterministic workflow**, so the fan-out, loop
+counting, budgets, and resume are enforced in code — not left to drift over a long run. First
+create the **run ledger** from `${CLAUDE_PLUGIN_ROOT}/templates/run-ledger.md` if it doesn't
+exist (`docs/plans/<date>-run-ledger.md`). Then invoke the **Workflow** tool with:
 
-## C — Plan
-`/oneshot-poc:plan`: a concrete plan tied to the acceptance checklist — exact files/functions/
-config, the dependency graph, and the test cases per requirement. Re-enter here (not B) when
-Phase E finds an implementation problem.
+```
+scriptPath: ${CLAUDE_PLUGIN_ROOT}/workflows/oneshot-build-loop.js
+args: { charter: "<charter path>", ledger: "<ledger path>", dir: ".",
+        maxOuter: 3, maxInner: 2, feedback: <gate feedback on a re-entry; omit the first time> }
+```
 
-## D — Implement
-`/oneshot-poc:implement`: build it, tests with new logic, run the gates (lint/type/tests),
-auto-fix up to 2 attempts per gate. Report real output on failure — never fake a pass.
+(Your running `/oneshot-poc:run` is the explicit opt-in to multi-agent orchestration.) It runs
+**B Brainstorm → C Plan → [ D Implement → E parallel Review → fix or re-plan ] → F Acceptance**,
+looping `E→C` when a finding needs a design change and `F→B` on unmet requirements — with hard
+**budgets** (≤`maxOuter` outer, ≤`maxInner` inner) and a **stuck-detector** (identical gaps
+across a full outer loop → stop). Every phase reads and appends to the ledger. The acceptance
+step drives a headless browser for UI items (the demo-video skill's bundled Playwright). It
+returns exactly one of:
 
-## E — Code review (agents)
-`/oneshot-poc:review`: spawn `learnings-researcher`, `code-quality-reviewer`,
-`architecture-reviewer`, `test-reviewer`, `security-reviewer` in parallel. Auto-fix P1/P2.
-**If a finding needs a design change, loop back to C (Plan)**; otherwise fix in place and
-re-review. Loop until the verdict is clean.
+- **`{status:'met', items, note}`** — every acceptance item is met; `note` lists any `needs_human`
+  items. Capture non-trivial fixes with `/oneshot-poc:compound`, then go to **⏸ G**.
+- **`{status:'stuck', stage, blocker, gaps}`** — a budget was hit or the same gaps persisted →
+  go to **STUCK** below. **Do NOT keep looping on your own.**
 
-## F — Product review (every requirement met?)
-Spawn the `acceptance-reviewer` agent: go through the charter's acceptance checklist (from A2)
-item by item against the actually-built product (read the code, run the app/tests, exercise each feature) and mark
-each **met / partial / missing** with evidence. **If anything is partial or missing, loop back
-to B (Brainstorm)** for that gap and run B→C→D→E→F again. Only when **every** item is met does
-the loop exit to G. Capture non-trivial fixes with `/oneshot-poc:compound`.
+### STUCK — the escape hatch (never spin forever)
+When the workflow returns `stuck`, stop the autonomy and escalate to the human: say what was
+being built, which acceptance items are unmet, **exactly what was tried**, and the specific
+decision you need (usually a scope cut or an approach change). WAIT. Treat the answer as charter
+input: **amend the charter** (next section), then re-invoke the workflow with the new `feedback`.
 
 ## ⏸ G — Verification handoff (HUMAN GATE)
 The product now meets the requirement on paper. **Stop and hand to the user:**
@@ -97,9 +104,17 @@ The product now meets the requirement on paper. **Stop and hand to the user:**
    confirm it works for them (mapped to the acceptance items), plus how to start the product.
 2. A short note on what was built and anything you couldn't fully self-verify.
 Then **urge them to actually use the product and give feedback**, and WAIT.
-- **If they report changes / feedback:** treat it as new requirement input and re-enter at
-  **B (Brainstorm)** — iterate the whole build loop on the feedback, back through F, then G again.
+- **If they report changes / feedback:** **amend the charter first** (see below), then re-invoke
+  the build-loop workflow with `feedback: <their changes>` — it iterates B→F against the updated
+  charter and returns to G again.
 - **If they approve:** proceed to H.
+
+### Living charter (keep the contract current)
+The charter is the source of truth; keep it alive. On any STUCK answer or G/H feedback that
+changes scope, **before re-entering the loop**: add or modify the affected rows, tag them
+`[explicit – feedback]`, bump the charter version, and note the change in the ledger. The
+`acceptance-reviewer` always checks against the current charter — a stale charter means the loop
+verifies the wrong thing.
 
 ## ⏸ H — Demo video (HUMAN GATE)
 Only now, with the product approved, create the narrated walkthrough with the **`demo-video`**

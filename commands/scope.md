@@ -34,7 +34,10 @@ clear questions, each with a recommended default**. Ask only what changes the bu
 interrogate. Record the answers verbatim; they become `[explicit]` provenance.
 
 ## 5. Write the Requirements Charter — the initial standing
-Write `docs/plans/<YYYY-MM-DD>-requirements-charter.md`. A table, one row per requirement/decision:
+Write `docs/plans/<YYYY-MM-DD>-requirements-charter.md`, starting with a **version line**
+(`Charter v1 · <date>`) — it is a **living document**: STUCK answers and gate feedback amend it
+(new/changed rows tagged `[explicit – feedback]`, version bumped), and the `acceptance-reviewer`
+always checks against the current version. A table, one row per requirement/decision:
 
 | # | Requirement / item | Decision | Provenance | Why (one line) |
 |---|--------------------|----------|------------|----------------|

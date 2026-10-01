@@ -26,6 +26,12 @@ deliver** — committing to a local branch and stopping before anything outward-
 - `compound-docs` — turn a solved problem into a durable solution doc
 - `demo-video` — plan + record a narrated, native-resolution product demo (local voice, no cloud keys)
 
+**Workflow** (`workflows/oneshot-build-loop.js`) — the deterministic engine behind the autonomous
+phases (B–F): brainstorm → plan → implement → parallel review → acceptance, with hard iteration
+**budgets**, a **stuck-detector** (escalates instead of spinning), and a **run ledger** it reads
+and appends to every phase (so a compaction or resume never loses state). The acceptance step
+drives a headless browser for UI requirements. `/oneshot-poc:run` invokes it between the human gates.
+
 **Hooks** — a session reminder about the loop, and a post-commit nudge to run `/oneshot-poc:compound`.
 
 ## Install

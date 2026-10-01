@@ -13,12 +13,19 @@ behaviour is really there.
 ## How to verify
 For each checklist item:
 1. **Locate** the implementing code (Grep/Read) — does it exist and do what the item asks?
-2. **Exercise** it where you safely can: run the test suite, run the app/CLI, hit an endpoint,
-   or trace the code path end-to-end. Prefer real execution over reading. Do NOT perform
-   destructive or outward-facing actions (no deletes, sends, deploys, or writes to shared
-   state) — if an item can only be confirmed that way, say so and mark it for human check.
+2. **Exercise** it where you safely can — prefer real execution over reading:
+   - **Logic / API / CLI:** run the test suite, run the app/CLI, hit the endpoint, or trace the
+     path end-to-end.
+   - **UI items:** actually drive the browser headless, don't just read the component. The
+     `oneshot-poc` plugin bundles Playwright under its `demo-video` skill
+     (`skills/demo-video/scripts/web/`) — start the app on a local URL and use a short Playwright
+     script (or `record-lib.mjs`) to navigate, click, type, and assert the expected result
+     appears. A requirement like "the dashboard lists runs" is **met** only once you've loaded
+     the page and seen the list, not because the code looks right.
+   - Do NOT perform destructive or outward-facing actions (no deletes, sends, deploys, logins,
+     or writes to shared state). If an item can only be confirmed that way, mark it **needs_human**.
 3. **Judge**: **met** (verified working), **partial** (present but incomplete/buggy — say how),
-   or **missing** (not implemented).
+   **missing** (not implemented), or **needs_human** (can't be confirmed without a forbidden action).
 
 ## Output
 A table, one row per acceptance item:
@@ -31,6 +38,9 @@ Then:
 - **Gaps** — every partial/missing item, each with the specific shortfall (this is what the
   loop fixes next).
 - **Needs human check** — items you could not verify without an outward-facing/destructive action.
-- **Verdict:** `ALL MET` only if every item is met; otherwise `GAPS REMAIN`.
+- **Verdict:** `ALL MET` when nothing is **partial** or **missing** (`needs_human` items are fine —
+  they carry to the human verification gate); otherwise `GAPS REMAIN`, and the gaps are what the
+  build loop fixes next.
 
-Be strict: a requirement that "should work" but you couldn't confirm is **partial**, not met.
+Be strict: a requirement that "should work" but you couldn't confirm by executing is **partial**,
+not met. `needs_human` is only for things that genuinely require a forbidden action.
