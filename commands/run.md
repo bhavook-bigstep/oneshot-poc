@@ -90,7 +90,11 @@ step drives a headless browser for UI items (the demo-video skill's bundled Play
 returns exactly one of:
 
 - **`{status:'met', items, note}`** — every acceptance item is met; `note` lists any `needs_human`
-  items. Capture non-trivial fixes with `/oneshot-poc:compound`, then go to **⏸ G**.
+  items. **If the charter has any visual/UI requirement, now run the UI design loop**
+  (`/oneshot-poc:ui` → `${CLAUDE_PLUGIN_ROOT}/workflows/ui-design-loop.js`) so the UI is
+  *intentional*, not just functional — it grounds the look in real references and iterates with a
+  Haiku visual critic on real screenshots. (It's a separate top-level workflow — workflows can't
+  nest.) Capture non-trivial fixes with `/oneshot-poc:compound`, then go to **⏸ G**.
 - **`{status:'stuck', stage, blocker, gaps}`** — a budget was hit or the same gaps persisted →
   go to **STUCK** below. **Do NOT keep looping on your own.**
 

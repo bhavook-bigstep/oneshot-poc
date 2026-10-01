@@ -17,10 +17,12 @@ deliver** — committing to a local branch and stopping before anything outward-
 - `run` — the hands-off orchestrator (the one command)
 - `init` — scaffold a repo for the loop (CLAUDE.md, AGENTS.md, rules, solutions index)
 - `scope` — scope QA: clarify ambiguities + over-scope, then write a provenance-tagged requirements charter
+- `ui` — grounded UI design: research real web inspiration → apply → iterate with a Haiku visual critic on real screenshots (fixes the generic-LLM look)
 - `brainstorm` · `plan` · `implement` · `review` · `compound` · `create-pr` — the loop phases, individually
 
-**Agents** (`@agent-oneshot-poc:<name>`) — spawned in parallel during review
-- `learnings-researcher`, `code-quality-reviewer`, `architecture-reviewer`, `test-reviewer`, `security-reviewer`
+**Agents** (`@agent-oneshot-poc:<name>`)
+- review: `learnings-researcher`, `code-quality-reviewer`, `architecture-reviewer`, `test-reviewer`, `security-reviewer`, `acceptance-reviewer`
+- UI: `ui-researcher` (web inspiration → design brief) and `ui-reviewer` (Haiku visual critic on screenshots)
 
 **Skills** (`/oneshot-poc:<name>`)
 - `compound-docs` — turn a solved problem into a durable solution doc
