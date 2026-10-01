@@ -22,6 +22,12 @@ const CHARTER = A.charter || 'REQUIREMENTS.md'
 const LEDGER = A.ledger || 'docs/plans/run-ledger.md'
 const MAX_OUTER = A.maxOuter || 3
 const MAX_INNER = A.maxInner || 2
+// Build ONE phase at a time when a phase is passed (requirements split into slices); otherwise
+// the whole charter. Scoping keeps each loop focused — nail this slice, then take the next fresh.
+const PHASE = A.phase || null
+const SCOPE = PHASE
+  ? `phase ${PHASE.id} "${PHASE.title}" (ONLY charter items ${(PHASE.items || []).join(', ')}; ignore items belonging to other phases)`
+  : 'the charter'
 // Manager–worker tiers: a smart manager (Opus) plans/judges/integrates; cheaper workers
 // (Sonnet) do the grunt exploration and implementation. Overridable via args.
 const MANAGER = A.managerModel || 'opus'
@@ -112,7 +118,7 @@ const REVIEW_DIMS = [
 phase('Brainstorm')
 const focus = A.feedback
   ? `Incorporate this gate feedback as new/changed requirements: ${A.feedback}`
-  : 'the open requirements in the charter'
+  : `the open requirements in ${SCOPE}`
 // WORKERS (Sonnet): each explores ONE approach from a distinct angle, in parallel.
 const ANGLES = [
   'MVP-first — the simplest design that satisfies the charter',
@@ -138,7 +144,7 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
   log(`Outer loop ${outer}/${MAX_OUTER}${gaps ? ` — closing gaps: ${gaps.join('; ')}` : ''}`)
 
   phase('Plan')
-  const planTarget = gaps ? `the remaining gaps: ${gaps.join('; ')}` : 'every acceptance item in the charter'
+  const planTarget = gaps ? `the remaining gaps: ${gaps.join('; ')}` : `every acceptance item in ${SCOPE}`
   await agent(
     `Manager: write/revise a concrete plan for ${planTarget}. Charter: ${CHARTER}. Exact files/functions/config, the dependency graph (what can run in parallel on disjoint files), and a test per acceptance item. ${RULES} ${LED}`,
     { phase: 'Plan', label: 'manager:plan', model: MANAGER },
@@ -204,7 +210,7 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
 
   phase('Acceptance')
   const acc = await agent(
-    `Verify the built product against EVERY acceptance item in ${CHARTER}, item by item. Read the code AND exercise it — run the tests, run the app/CLI, and for UI items drive a headless browser (the oneshot-poc demo-video skill bundles Playwright under its scripts/web — use record-lib or a plain Playwright script to click/assert). Mark each met / partial / missing / needs_human with evidence (file:line, test name, command+result, or the UI assertion). Do NOT perform destructive or outward-facing actions. ${LED}`,
+    `Verify the built product against EVERY acceptance item in ${SCOPE} (from ${CHARTER}), item by item. Read the code AND exercise it — run the tests, run the app/CLI, and for UI items drive a headless browser (the oneshot-poc demo-video skill bundles Playwright under its scripts/web — use record-lib or a plain Playwright script to click/assert). Mark each met / partial / missing / needs_human with evidence (file:line, test name, command+result, or the UI assertion). Do NOT perform destructive or outward-facing actions. ${LED}`,
     { phase: 'Acceptance', agentType: 'acceptance-reviewer', model: REVIEWER, schema: ACCEPT },
   )
   if (acc && acc.allMet) {

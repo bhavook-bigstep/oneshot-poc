@@ -30,26 +30,39 @@ self-correcting loop with **exactly two human gates** (⏸ G and ⏸ H).
 ## The state machine
 
 ```
-A REQUIREMENT ─▶ ⏸ A2 SCOPE QA + CHARTER ─▶ B BRAINSTORM ─▶ C PLAN ─▶ D IMPLEMENT ─▶ E CODE REVIEW
-                   (clarify · confirm)           ▲             ▲                          │
-                                                 │             └──────(problem found)─────┘
-                                                 │                                         │ (clean)
-                                                 │                                         ▼
-                                                 └────(requirements NOT met)──── F PRODUCT REVIEW
-                                                                                           │ (all met)
-                                                                                           ▼
-                                                       ⏸ G VERIFY HANDOFF (user uses it + feedback)
-                                                                                           │
-                                                 ┌──(feedback: changes)────────────────────┘
-                                                 ▼                                          │ (user approves)
-                                            (back to B)                                     ▼
-                                                                                   ⏸ H DEMO VIDEO (approve)
-                                                                                           │
-                                                 ┌──(video: changes)───────────────────────┘
-                                                 ▼                                          │ (user approves)
-                                            (iterate H)                                     ▼
-                                                                                        I FINISH
+Phase 0  RESUME? ── ledger exists & not done ──▶ jump to checkpoint.next_node, skip finished work
+   │ (fresh)
+   ▼
+A Requirement ─▶ ⏸ A2 Scope QA + REQUIREMENTS.md ─▶ A3 Phase plan (split reqs into ordered slices)
+                                                              │
+                                   ┌──────────── for each phase Pn, in order ───────────┐
+                                   ▼                                                      │
+                          ┌─ BUILD LOOP (scoped to Pn) ─────────────────────────┐        │
+                          │  B Brainstorm → C Plan → [D Implement → E Review] → F Acceptance
+                          │        ▲            ▲                        │                │
+                          │        │   (design change)──────────────────┘                │
+                          │        └──(Pn's items NOT met)── F                            │
+                          └───────────────────│(all Pn items met)──────────────┘         │
+                                   next phase ◀┘   (stuck → ⏸ STUCK: escalate, amend, resume)
+                                   └──────────── all phases met ───────────────────────────┘
+                                                              │
+                                                              ▼
+                       ⏸ G VERIFY (user uses it) ─▶ ⏸ H DEMO VIDEO (approve) ─▶ I FINISH
+                       (G/H feedback ─▶ amend charter + phase plan ─▶ back into the per-phase loop)
 ```
+
+## Phase 0 — Resume check (FIRST thing, every run)
+Before anything else, look for an existing run ledger (`docs/plans/*-run-ledger.md`). If one
+exists and its checkpoint `status` is not `done`, this is a **resume**, not a fresh start:
+- Read the **Checkpoint** block and the **Phase plan**. Tell the user in one line where you're
+  resuming (`resuming P2 "…", next_node: BUILD`).
+- **Jump to `next_node` and skip everything already finished** — don't re-run scope QA if
+  `REQUIREMENTS.md` exists, don't re-plan phases if the plan is there, don't rebuild phases
+  marked `done`. Continue the per-phase loop from the first phase not `done`.
+- Same session + a recorded `workflow_run_id`? Resume that Workflow with `resumeFromRunId` for an
+  instant cache hit. Otherwise re-invoke the build-loop workflow fresh — it reads the ledger and
+  skips acceptance items already `met`, so no completed work is redone.
+If no ledger exists (or it's `done`), start fresh at A.
 
 ## A — Requirement intake
 Read **$ARGUMENTS** (or the referenced requirements doc) and parse it into a draft list of
@@ -68,41 +81,57 @@ disk. Its **acceptance checklist** (the testable, in-scope items) is the contrac
 the loop and the `acceptance-reviewer` run against. **Confirm the charter with the user**, fold
 in corrections — then proceed; this is the last interaction until ⏸ G.
 
-## B–F — Autonomous build loop (run it as the Workflow engine)
-The whole build loop runs as the bundled **deterministic workflow**, so the fan-out, loop
-counting, budgets, and resume are enforced in code — not left to drift over a long run. First
-confirm `REQUIREMENTS.md` exists (A2 must have written it), and create the **run ledger** from
-`${CLAUDE_PLUGIN_ROOT}/templates/run-ledger.md` if missing (`docs/plans/<date>-run-ledger.md`).
-Then invoke the **Workflow** tool with:
+## A3 — Phase plan (split the requirements into ordered slices)
+Run `/oneshot-poc:phases`: break the acceptance checklist into a small number of **ordered,
+shippable phases** (P1, P2, …; 1–4 items each; foundations first; every item in exactly one
+phase). Write them into the ledger's **Phase plan** and tag each requirement row with its phase.
+This is what removes the "get everything right in one loop" pressure — the build loop takes **one
+phase at a time**, finishes it, then takes the next fresh. Create the run ledger from
+`${CLAUDE_PLUGIN_ROOT}/templates/run-ledger.md` here if it doesn't exist.
+
+## B–F — Per-phase build loop (run each slice as the Workflow engine)
+Take the phases **one at a time, in order** (skipping any marked `done` on a resume). For **each
+phase Pn**, set the checkpoint `active_phase: Pn` + `next_node: BUILD` in the ledger, then invoke
+the bundled **deterministic workflow** scoped to that phase — so fan-out, loop counting, budgets,
+and resume are enforced in code, and the loop only has to nail *this slice*:
 
 ```
 scriptPath: ${CLAUDE_PLUGIN_ROOT}/workflows/oneshot-build-loop.js
 args: { charter: "REQUIREMENTS.md", ledger: "<ledger path>", dir: ".",
-        maxOuter: 3, maxInner: 2, feedback: <gate feedback on a re-entry; omit the first time> }
+        phase: { id: "P1", title: "…", items: [1, 2] },   // the current slice
+        maxOuter: 3, maxInner: 2, feedback: <gate/STUCK feedback on a re-entry; else omit> }
 ```
 
-(Your running `/oneshot-poc:run` is the explicit opt-in to multi-agent orchestration.) It runs
-**B Brainstorm → C Plan → [ D Implement → E parallel Review → fix or re-plan ] → F Acceptance**,
-looping `E→C` when a finding needs a design change and `F→B` on unmet requirements — with hard
-**budgets** (≤`maxOuter` outer, ≤`maxInner` inner) and a **stuck-detector** (identical gaps
-across a full outer loop → stop). Every phase reads and appends to the ledger. The acceptance
-step drives a headless browser for UI items (the demo-video skill's bundled Playwright). It
+(Your running `/oneshot-poc:run` is the explicit opt-in to multi-agent orchestration. **Record the
+returned `runId` into the ledger** so a same-session resume can `resumeFromRunId`.) Each phase runs
+**B Brainstorm → C Plan → [ D Implement → E parallel Review → fix or re-plan ] → F Acceptance**
+*scoped to that phase's items*, looping `E→C` on design changes and `F→B` on unmet items — with
+hard **budgets** and a **stuck-detector**. Every node reads and appends to the ledger. Acceptance
+drives a headless browser for UI items (the demo-video skill's bundled Playwright). Per phase it
 returns exactly one of:
 
-- **`{status:'met', items, note}`** — every acceptance item is met; `note` lists any `needs_human`
-  items. **If the charter has any visual/UI requirement, now run the UI design loop**
-  (`/oneshot-poc:ui` → `${CLAUDE_PLUGIN_ROOT}/workflows/ui-design-loop.js`) so the UI is
-  *intentional*, not just functional — it grounds the look in real references and iterates with a
-  Haiku visual critic on real screenshots. (It's a separate top-level workflow — workflows can't
-  nest.) Capture non-trivial fixes with `/oneshot-poc:compound`, then go to **⏸ G**.
-- **`{status:'stuck', stage, blocker, gaps}`** — a budget was hit or the same gaps persisted →
-  go to **STUCK** below. **Do NOT keep looping on your own.**
+- **`{status:'met', ...}`** — this phase's items are met. **Mark Pn `done`** in the ledger
+  (phase plan + requirement rows + iteration log), capture non-trivial fixes with
+  `/oneshot-poc:compound`, and **move to the next phase** (set `active_phase` to it, loop back to
+  the top of B–F). When **Pn was the last phase**, all requirements are met → go to **All phases
+  done** below.
+- **`{status:'stuck', stage, blocker, gaps}`** — a budget was hit or the same gaps persisted for
+  this phase → go to **STUCK** below. **Do NOT keep looping on your own.**
+
+### All phases done
+Every phase is `done`. **If the charter has any visual/UI requirement, now run the UI design loop**
+(`/oneshot-poc:ui` → `${CLAUDE_PLUGIN_ROOT}/workflows/ui-design-loop.js`) so the UI is *intentional*,
+not just functional — it grounds the look in real references and iterates with a Haiku visual critic
+on real screenshots. (Separate top-level workflow — workflows can't nest.) Set the checkpoint
+`next_node: VERIFY`, then go to **⏸ G**.
 
 ### STUCK — the escape hatch (never spin forever)
-When the workflow returns `stuck`, stop the autonomy and escalate to the human: say what was
-being built, which acceptance items are unmet, **exactly what was tried**, and the specific
+When a phase returns `stuck`, set the checkpoint `status: stuck`, stop the autonomy, and escalate:
+say which phase, which of its items are unmet, **exactly what was tried**, and the specific
 decision you need (usually a scope cut or an approach change). WAIT. Treat the answer as charter
-input: **amend the charter** (next section), then re-invoke the workflow with the new `feedback`.
+input: **amend the charter** (and the phase plan if the slice itself was wrong), then re-invoke the
+build-loop workflow **for this phase** with the new `feedback`. (Because the ledger is the
+checkpoint, the user can also just re-run `/oneshot-poc:run` later and it resumes here.)
 
 ## ⏸ G — Verification handoff (HUMAN GATE)
 The product now meets the requirement on paper. **Stop and hand to the user:**
@@ -110,17 +139,18 @@ The product now meets the requirement on paper. **Stop and hand to the user:**
    confirm it works for them (mapped to the acceptance items), plus how to start the product.
 2. A short note on what was built and anything you couldn't fully self-verify.
 Then **urge them to actually use the product and give feedback**, and WAIT.
-- **If they report changes / feedback:** **amend the charter first** (see below), then re-invoke
-  the build-loop workflow with `feedback: <their changes>` — it iterates B→F against the updated
-  charter and returns to G again.
-- **If they approve:** proceed to H.
+- **If they report changes / feedback:** **amend the charter and the phase plan first** (see
+  below) — usually a new phase (or new items on the last phase) for the requested changes — then
+  run the per-phase build loop over the new/affected phase(s), and return to G.
+- **If they approve:** set `next_node: VIDEO`, proceed to H.
 
-### Living charter (keep the contract current)
-The charter is the source of truth; keep it alive. On any STUCK answer or G/H feedback that
-changes scope, **before re-entering the loop**: add or modify the affected rows, tag them
-`[explicit – feedback]`, bump the charter version, and note the change in the ledger. The
-`acceptance-reviewer` always checks against the current charter — a stale charter means the loop
-verifies the wrong thing.
+### Living charter + phase plan (keep the contract current)
+The charter is the source of truth; keep it and the phase plan alive. On any STUCK answer or G/H
+feedback that changes scope, **before re-entering the loop**: add/modify the affected `REQUIREMENTS.md`
+rows (tag `[explicit – feedback]`, bump the charter version), reflect them in the ledger's phase
+plan (a new phase, or new items on a phase — set its status back to `todo`/`in-progress`), and note
+it in the iteration log. The `acceptance-reviewer` always checks the current charter — a stale
+charter or phase plan means the loop verifies the wrong thing.
 
 ## ⏸ H — Demo video (HUMAN GATE)
 Only now, with the product approved, create the narrated walkthrough with the **`demo-video`**
@@ -132,8 +162,9 @@ secrets. Deliver the `.mp4` + transcript, and **WAIT for the user's feedback on 
 - **If they approve:** proceed to I.
 
 ## I — Finish
-Summarise: the met acceptance checklist, the gate results, the plan + solution docs, the
-committed local branch, and the final video path. Remind the user that pushing / opening a PR
+Set the checkpoint `status: done` in the ledger. Summarise: the met acceptance checklist (all
+phases), the gate results, the plan + solution docs, the committed local branch, and the final
+video path. Remind the user that pushing / opening a PR
 (`/oneshot-poc:create-pr`) is their explicit next step — this loop never pushes on its own.
 
 ## Gates & safety (always)

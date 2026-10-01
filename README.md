@@ -17,6 +17,7 @@ deliver** — committing to a local branch and stopping before anything outward-
 - `run` — the hands-off orchestrator (the one command)
 - `init` — scaffold a repo for the loop (CLAUDE.md, AGENTS.md, rules, solutions index)
 - `scope` — scope QA: clarify ambiguities + over-scope, then write a provenance-tagged requirements charter
+- `phases` — split the requirements into ordered, shippable slices, each built + verified on its own loop
 - `ui` — grounded UI design: research real web inspiration → apply → iterate with a Haiku visual critic on real screenshots (fixes the generic-LLM look)
 - `brainstorm` · `plan` · `implement` · `review` · `compound` · `create-pr` — the loop phases, individually
 
@@ -65,6 +66,26 @@ Validate before publishing: `claude plugin validate ./oneshot-poc`
 The run delivers: the working code + tests (gates passing), the plan and any solution docs,
 a committed local feature branch, and the demo video (`.mp4` + transcript). It never pushes
 or opens a PR on its own — use `/oneshot-poc:create-pr` (or `git push`) when you're ready.
+
+### How a run flows (phases + resume)
+
+1. **Scope QA → `REQUIREMENTS.md`.** The one up-front human gate: ambiguities and over-scope
+   are confirmed with you, then a provenance-tagged charter is written to the repo root (always).
+2. **Phase plan.** `/oneshot-poc:phases` splits the acceptance checklist into a few **ordered,
+   shippable slices**. The build loop takes **one slice at a time** — so the loop only has to get
+   *this* part right, then takes the next fresh. No "nail everything in one pass" pressure.
+3. **Per-phase build loop.** Each slice runs the deterministic engine (brainstorm → plan →
+   implement → review → acceptance) until its items pass, then the next slice starts.
+4. **Two human gates at the end:** ⏸ verify the product (you use it and give feedback), then
+   ⏸ approve the demo video. Feedback amends the charter + phase plan and re-enters the loop.
+
+**Resume / checkpoint.** Every node reads and appends to a **run ledger**
+(`docs/plans/*-run-ledger.md`) whose **Checkpoint** block records `active_phase`, `next_node`,
+the last-completed step, and the workflow `run_id`. Re-running `/oneshot-poc:run` after an
+interruption (or a context compaction) reads that block first, **skips finished phases, and
+resumes from the last checkpoint** — same session with a recorded `run_id`, it resumes the
+Workflow itself for an instant cache hit; otherwise it re-invokes the engine, which skips
+acceptance items already met. Nothing completed is redone.
 
 ## Notes
 
