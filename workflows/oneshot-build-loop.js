@@ -6,7 +6,7 @@ export const meta = {
     { title: 'Brainstorm', detail: 'cited approaches for the open requirements' },
     { title: 'Plan', detail: 'concrete plan tied to the acceptance checklist' },
     { title: 'Implement', detail: 'build + tests + gates (auto-fix)' },
-    { title: 'Review', detail: 'parallel reviewers; auto-fix P1/P2' },
+    { title: 'Review', detail: 'parallel reviewers → re-evaluator triages crucial-vs-defer + routes (fix / replan / rebrainstorm)' },
     { title: 'Acceptance', detail: 'verify every requirement against the built product' },
   ],
 }
@@ -68,6 +68,43 @@ const FINDINGS = {
     },
   },
   required: ['findings'],
+}
+// Review triage / re-evaluator: weighs ALL findings → the crucial set to fix now (vs. defer) AND
+// the route to resolve them (fix in place / re-plan / re-brainstorm).
+const TRIAGE = {
+  type: 'object',
+  properties: {
+    route: { type: 'string', enum: ['fix', 'replan', 'rebrainstorm'] },
+    mustFix: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          severity: { type: 'string', enum: ['P1', 'P2', 'P3'] },
+          file: { type: 'string' },
+          line: { type: 'integer' },
+          issue: { type: 'string' },
+          why: { type: 'string' },
+        },
+        required: ['severity', 'issue'],
+      },
+    },
+    defer: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          severity: { type: 'string', enum: ['P1', 'P2', 'P3'] },
+          file: { type: 'string' },
+          issue: { type: 'string' },
+          why: { type: 'string' },
+        },
+        required: ['severity', 'issue', 'why'],
+      },
+    },
+    rationale: { type: 'string' },
+  },
+  required: ['route', 'mustFix', 'defer'],
 }
 const IMPL = {
   type: 'object',
@@ -244,46 +281,81 @@ for (let approach = 1; approach <= MAX_APPROACHES; approach++) {
       ),
     )).filter(Boolean)
     const all = reviews.flatMap((r) => r.findings || [])
-    const blocking = all.filter((f) => f.severity === 'P1' || f.severity === 'P2')
-    lastReview = blocking
-    if (blocking.length === 0) {
-      log(`✓ OUT Review — clean (no P1/P2 across ${all.length} finding(s)) → hand to Acceptance`)
+    if (all.length === 0) {
+      lastReview = []
+      log(`✓ OUT Review — clean (0 findings) → hand to Acceptance`)
       break // clean → leave inner, go to acceptance
     }
 
-    if (blocking.some((f) => f.needsDesignChange)) {
-      const design = blocking.filter((f) => f.needsDesignChange)
+    // RE-EVALUATOR / triage: one manager weighs ALL findings together and decides (a) which are
+    // crucial to fix now vs. defer — we can't fix everything — and (b) the ROUTE to resolve them:
+    // fix in place / re-plan / re-brainstorm. P1s (PII-content leak, source mutation, uncontrolled
+    // egress, unexplained output, non-reproducible run, broken build, security) are NEVER
+    // deferrable — contracts are non-negotiable — so any P1 is forced back into mustFix in code.
+    log(`▶ DO  Review triage — manager (${MANAGER}) weighs ${all.length} finding(s): crucial-vs-defer + route (fix / replan / rebrainstorm)`)
+    const triage = await agent(
+      `Re-evaluate ALL review findings and decide two things. Findings: ${JSON.stringify(all)}.\n` +
+      `1) WHICH to fix now vs. defer — we can't fix everything, so keep in mustFix only what's crucial for ${SCOPE} to be correct, safe, explainable and reproducible; defer polish / nice-to-haves (each with a one-line why). DEDUPE overlapping findings. Every P1 (PII or content leak, source mutation, uncontrolled inference egress, unexplained output, non-reproducible run, broken build, security hole) is ALWAYS mustFix — never defer a P1.\n` +
+      `2) The ROUTE for the crucial set — pick the LEAST disruptive that actually resolves them: "fix" = local edits only, then re-review; "replan" = the plan/design is wrong and needs reworking (E→C); "rebrainstorm" = the whole approach is wrong and a different one should be explored (F→B).\n` +
+      `Record the deferred findings and the chosen route + rationale in the ledger. ${RULES} ${LED}`,
+      { phase: 'Review', label: 'review:triage', model: MANAGER, schema: TRIAGE },
+    )
+    // Safety net: force any P1 back into mustFix regardless of what triage said.
+    const tMust = (triage && triage.mustFix) || all.filter((f) => f.severity === 'P1' || f.severity === 'P2')
+    const forcedP1 = all.filter((f) => f.severity === 'P1' && !tMust.some((m) => m.file === f.file && m.issue === f.issue))
+    const mustFix = tMust.concat(forcedP1)
+    const deferred = ((triage && triage.defer) || []).filter((f) => f.severity !== 'P1')
+    const route = (triage && triage.route) || 'fix'
+    lastReview = mustFix
+    if (deferred.length) log(`Review triage — deferring ${deferred.length} non-crucial finding(s) (recorded in ledger): ${deferred.map((d) => `${d.severity} ${d.file || ''}`).join(', ')}`)
+    if (forcedP1.length) log(`Review triage — forced ${forcedP1.length} P1 finding(s) back into the fix set (non-negotiable)`)
+
+    if (mustFix.length === 0) {
+      log(`✓ OUT Review — triage: nothing crucial to fix (${deferred.length} deferred) → hand to Acceptance`)
+      break // treat as clean
+    }
+
+    // ROUTE → re-brainstorm: the approach itself is wrong (own budget; else stuck).
+    if (route === 'rebrainstorm') {
+      if (approach < MAX_APPROACHES) {
+        escalate = `review triage: the approach is wrong — ${mustFix.map((f) => f.issue).join('; ')}`
+        trail.push(`approach ${approach}: review triage → re-brainstorm`)
+        log(`✓ OUT Review — triage route=rebrainstorm → RE-BRAINSTORM the approach`)
+        reBrainstorm = true
+        break // leave inner; the guard after the outer loop re-brainstorms
+      }
+      log(`✓ OUT Review — triage route=rebrainstorm but no approaches left → return stuck`)
+      return { status: 'stuck', stage: 'design-churn', blocker: `review triage called for a new approach but ${MAX_APPROACHES} approach(es) are spent`, gaps: mustFix.map((f) => f.issue), findings: mustFix, lastReview, lastAcceptance: lastAccept, trail, outer }
+    }
+
+    // ROUTE → re-plan: plan/design rework (bounded by MAX_REPLANS; churn escalates to rebrainstorm).
+    if (route === 'replan') {
       rePlans++
-      trail.push(`outer ${outer}: re-plan #${rePlans} on design change — ${design.map((f) => f.issue).join('; ')}`)
-      // Re-plan churn guard: if design changes keep forcing E→C past the budget, PLAN-level rework
-      // isn't working — re-think the whole approach (re-brainstorm) if budget remains, else stuck.
+      trail.push(`approach ${approach}, outer ${outer}: review triage → re-plan #${rePlans} — ${mustFix.map((f) => f.issue).join('; ')}`)
       if (rePlans > MAX_REPLANS) {
         if (approach < MAX_APPROACHES) {
-          escalate = `the approach kept needing rework (design-change findings: ${design.map((f) => f.issue).join('; ')})`
-          trail.push(`approach ${approach}: design churn after ${rePlans - 1} re-plan(s) → re-brainstorm`)
-          log(`✓ OUT Review — design churn; re-plan budget (${MAX_REPLANS}) spent → RE-BRAINSTORM the approach`)
+          escalate = `re-plan churn (${rePlans - 1}×) on: ${mustFix.map((f) => f.issue).join('; ')}`
+          trail.push(`approach ${approach}: re-plan budget (${MAX_REPLANS}) spent → re-brainstorm`)
+          log(`✓ OUT Review — re-plan budget (${MAX_REPLANS}) spent → RE-BRAINSTORM the approach`)
           reBrainstorm = true
-          break // leave inner; the guard after the outer loop leaves the approach to re-brainstorm
+          break
         }
-        log(`✓ OUT Review — design churn and no approaches left → return stuck with findings`)
-        return {
-          status: 'stuck', stage: 'design-churn',
-          blocker: `the approach kept needing rework across ${MAX_APPROACHES} approach(es) — re-planned ${rePlans - 1}× without reaching acceptance`,
-          gaps: design.map((f) => f.issue), findings: design, lastReview, lastAcceptance: lastAccept, trail, outer,
-        }
+        log(`✓ OUT Review — re-plan churn and no approaches left → return stuck`)
+        return { status: 'stuck', stage: 'design-churn', blocker: `re-planned ${rePlans - 1}× across ${MAX_APPROACHES} approach(es) without converging`, gaps: mustFix.map((f) => f.issue), findings: mustFix, lastReview, lastAcceptance: lastAccept, trail, outer }
       }
-      designToFix = design // the next Plan reworks the approach to resolve these
-      log(`✓ OUT Review — ${blocking.length} blocker(s), design change (re-plan ${rePlans}/${MAX_REPLANS}) → re-plan (E→C)`)
+      designToFix = mustFix // the next Plan reworks the design to resolve these
+      log(`✓ OUT Review — triage route=replan (re-plan ${rePlans}/${MAX_REPLANS}) → re-plan (E→C)`)
       rePlan = true
-      break // E→C: a design change is needed → re-plan (outer loop re-enters Plan)
+      break
     }
-    // fix in place, then re-review (next inner iteration)
-    log(`✓ OUT Review — ${blocking.length} blocker(s), fixable in place → fix then re-review`)
+
+    // ROUTE → fix in place: patch ONLY the crucial set, leave deferred items, then re-review.
+    log(`✓ OUT Review — triage route=fix: ${mustFix.length} crucial, ${deferred.length} deferred → fix then re-review`)
     await agent(
-      `Fix these review findings, then re-run the gates: ${JSON.stringify(blocking)}. ${RULES} ${LED}`,
+      `Fix ONLY these crucial review findings, then re-run the gates: ${JSON.stringify(mustFix)}. Do NOT touch the deferred items. ${RULES} ${LED}`,
       { phase: 'Review', label: 'review:fix', model: REVIEWER },
     )
-    if (inner === MAX_INNER) log(`Inner review budget reached (${MAX_INNER}); proceeding to acceptance with any residual P2s noted.`)
+    if (inner === MAX_INNER) log(`Inner review budget reached (${MAX_INNER}); proceeding to acceptance with any deferred items noted.`)
   }
   if (reBrainstorm) break // the approach is wrong → leave the outer loop to re-brainstorm
   if (rePlan) continue // re-plan this outer iteration's work

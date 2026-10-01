@@ -29,8 +29,18 @@ Merge, de-duplicate, classify **P1** (blocker: broken build, security, data loss
 output) / **P2** (should-fix: correctness, perf, weak test) / **P3** (nice-to-have). Drop
 anything without `file:line` evidence.
 
-## 4. Verdict
-Emit one verdict — `APPROVED` / `APPROVED_WITH_COMMENTS` / `CHANGES_REQUIRED` — then the
-findings (P1 first). Standalone, offer a menu (auto-fix P1 · show P2/P3 · create-pr · stop).
-Inside `/oneshot-poc:run`, **do not stop** — auto-fix P1/P2, loop back to Plan if a finding
-needs a design change, else continue to the product-review phase.
+## 4. Re-evaluate (triage crucial-vs-defer + route)
+You can't fix everything in a PoC. Weigh **all** findings together and decide, in one pass:
+- **Which to fix now vs. defer** — keep only what's crucial for the charter to be correct, safe,
+  explainable and reproducible; defer polish/nice-to-haves (each with a one-line why, recorded).
+  **Every P1 is always fix-now — never defer a contract blocker** (PII/content leak, source
+  mutation, uncontrolled egress, unexplained output, non-reproducible run, broken build, security).
+- **The route for the crucial set** — the least disruptive that actually resolves it: **fix**
+  (local edits), **replan** (plan/design is wrong → re-plan), or **rebrainstorm** (the approach
+  is wrong → re-explore).
+
+## 5. Verdict
+Emit one verdict — `APPROVED` / `APPROVED_WITH_COMMENTS` / `CHANGES_REQUIRED` — then the crucial
+findings (P1 first) + the deferred list + the route. Standalone, offer a menu (apply route ·
+show deferred · create-pr · stop). Inside `/oneshot-poc:run`, **do not stop** — act on the route
+(fix / replan / rebrainstorm) and continue.

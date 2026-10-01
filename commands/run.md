@@ -119,18 +119,22 @@ args: { charter: "REQUIREMENTS.md", ledger: "<ledger path>", dir: ".",
 
 (Your running `/oneshot-poc:run` is the explicit opt-in to multi-agent orchestration. **Record the
 returned `runId` into the ledger** so a same-session resume can `resumeFromRunId`.) Each phase runs
-**B Brainstorm → C Plan → [ D Implement → E parallel Review → fix or re-plan ] → F Acceptance**
-*scoped to that phase's items*, with a three-rung **escalation ladder** so it self-corrects at the
-right level instead of spinning or over-thinking:
-- a review finding fixable in place → **fix + re-review** (inner loop), no re-plan;
-- a `needsDesignChange` finding or an acceptance gap → **E→C / F→C re-plan** (refine the plan, same
-  approach), bounded by `maxReplans`;
-- the **same gaps persist across a full loop**, or design changes keep churning → **F→B re-brainstorm**
-  (re-think the *approach*, not just the plan), bounded by `maxRebrainstorms`;
-- still failing after the last approach → **stuck** (human).
+**B Brainstorm → C Plan → [ D Implement → E parallel Review → re-evaluate → fix / replan / rebrainstorm ] → F Acceptance**
+*scoped to that phase's items*. After the parallel reviewers, a **re-evaluator** (one manager) weighs
+**all** findings together and decides — because you can't fix everything in a PoC — **which are crucial
+to fix now vs. defer**, and **the route** that resolves them. P1 contract blockers (PII/content leak,
+source mutation, uncontrolled egress, unexplained output, non-reproducible run, broken build, security)
+are **never deferrable** and are forced into the fix set. The route is the three-rung escalation ladder,
+so it self-corrects at the right level instead of spinning or over-thinking:
+- route **fix** → patch only the crucial set in place → **re-review** (inner loop);
+- route **replan** → the plan/design is wrong → **E→C re-plan** (same approach), bounded by `maxReplans`;
+- route **rebrainstorm** → the approach is wrong → **F→B re-brainstorm**, bounded by `maxRebrainstorms`;
+- an acceptance gap loops to Plan; persistent gaps or re-plan churn escalate to re-brainstorm; the last
+  approach still failing → **stuck** (human).
 
-Every node reads and appends to the ledger. Acceptance drives a headless browser for UI items (the
-demo-video skill's bundled Playwright). Per phase it returns exactly one of:
+Deferred (non-crucial) findings are recorded in the ledger — nothing is silently dropped. Every node
+reads and appends to the ledger. Acceptance drives a headless browser for UI items (the demo-video
+skill's bundled Playwright). Per phase it returns exactly one of:
 
 - **`{status:'met', ...}`** — this phase's items are met. **Mark Pn `done`** in the ledger
   (phase plan + requirement rows + iteration log), capture non-trivial fixes with
