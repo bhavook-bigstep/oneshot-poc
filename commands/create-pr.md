@@ -7,6 +7,10 @@ argument-hint: [PR title]
 
 Open a PR for the current work. **Outward-facing — only run on explicit user request.**
 
+> **Narrate each step (IN → DO → OUT).** Open each numbered step with one line of what it got and
+> what it will do (`▶ IN … / ▶ DO …`), and close it with one line of what it produced (`✓ OUT …`),
+> so intent is scannable without scrolling.
+
 ## 1. Preconditions
 - The user has asked for a PR (this command is itself that ask).
 - Gates pass (lint/type/tests). If not, stop and report.

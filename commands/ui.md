@@ -9,6 +9,10 @@ LLMs default to bland, templated UIs. This fixes that with a mechanism: **ground
 real references**, apply it, and **check what it actually looks like** with a cheap multimodal
 model in a tight loop — not "the code looks fine," but a screenshot a critic scores.
 
+> **Narrate each step (IN → DO → OUT).** Open each step with one line of what it got and what it
+> will do (`▶ IN … / ▶ DO …`), and close it with what it produced (`✓ OUT …`). The workflow itself
+> narrates its own nodes (Inspire/Apply/Render/Critique) this way via `log()` — surface those.
+
 It runs as the bundled workflow. Gather the inputs, then invoke the **Workflow** tool:
 
 ```

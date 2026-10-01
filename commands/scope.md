@@ -9,6 +9,10 @@ Turn a raw requirement into a **confirmed, provenance-tagged charter** before an
 This is the one place up front where you **ask**; the build loop that follows does not. Be
 thorough here — a wrong assumption now costs a whole loop later.
 
+> **Narrate each step (IN → DO → OUT).** Open each numbered step with one line of what it got and
+> what it will do (`▶ IN … / ▶ DO …`), and close it with one line of what it produced (`✓ OUT …`),
+> so intent is scannable without scrolling. Reporting only — inside `/oneshot-poc:run` it adds no pause.
+
 > **MANDATORY OUTPUT:** this phase MUST end by writing a real file — **`REQUIREMENTS.md` at the
 > repo root** — that lists every requirement, its decision, and a provenance-tagged reason.
 > Writing it to disk is the deliverable of this phase, not an optional nicety. Do not describe

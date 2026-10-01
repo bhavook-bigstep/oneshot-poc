@@ -8,6 +8,10 @@ argument-hint: <what was solved>
 Capture the learnings from **$ARGUMENTS** so it never has to be re-investigated. Only for
 **non-trivial** work.
 
+> **Narrate each step (IN → DO → OUT).** Open each numbered step with one line of what it got and
+> what it will do (`▶ IN … / ▶ DO …`), and close it with one line of what it produced (`✓ OUT …`),
+> so intent is scannable without scrolling. Reporting only — inside `/oneshot-poc:run` it adds no pause.
+
 ## 1. Precondition
 Confirm the problem is solved and verified. If still in progress, stop and say so.
 

@@ -27,6 +27,20 @@ self-correcting loop with **exactly two human gates** (⏸ G and ⏸ H).
 > feedback asks for changes, amend the charter and re-enter the loop — never skip to the end. The
 > one thing you never do unattended is an outward-facing action (push / PR / send).
 
+> ## NARRATE EVERY NODE (IN → DO → OUT — no exceptions)
+> So the user can observe intent without scrolling, **every node** below (Phase 0, A, A2, A3,
+> each per-phase build node, STUCK, G, H, I) is bookended with three one-line markers:
+> ```
+> ▶ IN  <node> — <what this node received: the ledger checkpoint, the charter items, the gate feedback…>
+> ▶ DO  <node> — <what it is about to do, in one line>
+> … (do the work) …
+> ✓ OUT <node> — <what it produced / decided, and the next node it hands to>
+> ```
+> Print `▶ IN` and `▶ DO` **before** acting, and `✓ OUT` **after**. Keep each to one line and name
+> concrete things (phase id, requirement #s, `next_node`, verdict). This is a reporting convention
+> only — it never adds a pause: `✓ OUT` of one node flows straight into `▶ IN` of the next inside
+> the uninterrupted build loop. The bundled workflow narrates its own nodes the same way via `log()`.
+
 ## The state machine
 
 ```

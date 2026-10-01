@@ -7,6 +7,10 @@ argument-hint: <the problem to explore>
 
 Divergent exploration of **$ARGUMENTS** — options, not a final plan. Keep it in PoC scope.
 
+> **Narrate each step (IN → DO → OUT).** Open each numbered step with one line of what it got and
+> what it will do (`▶ IN … / ▶ DO …`), and close it with one line of what it produced (`✓ OUT …`),
+> so intent is scannable without scrolling. Reporting only — inside `/oneshot-poc:run` it adds no pause.
+
 ## 1. Frame
 Restate the problem: goal, inputs, constraints, what's explicitly out of scope.
 

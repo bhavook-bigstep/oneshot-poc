@@ -7,6 +7,10 @@ argument-hint: <what to plan>
 
 Produce a concrete plan for **$ARGUMENTS**.
 
+> **Narrate each step (IN → DO → OUT).** Open each numbered step with one line of what it got and
+> what it will do (`▶ IN … / ▶ DO …`), and close it with one line of what it produced (`✓ OUT …`),
+> so intent is scannable without scrolling. Reporting only — inside `/oneshot-poc:run` it adds no pause.
+
 ## 1. Restate & intake
 Goal, inputs, method, output, constraints. If a field is genuinely unclear and changes
 scope, ask one question with a recommended default; otherwise assume and proceed.

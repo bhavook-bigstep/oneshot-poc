@@ -11,6 +11,10 @@ on its own. The build loop then takes **one phase at a time**, iterates until th
 all pass, and only then moves to the next — fresh. This turns "nail everything in one loop" into
 "nail one slice, then the next."
 
+> **Narrate each step (IN → DO → OUT).** Open each step with one line of what it got and what it
+> will do (`▶ IN … / ▶ DO …`), and close it with one line of what it produced (`✓ OUT …`), so
+> intent is scannable without scrolling. Reporting only — inside `/oneshot-poc:run` it adds no pause.
+
 ## How to slice (manager judgement — use the heavy model)
 - **Group by coherence + dependency:** a phase should deliver something verifiable on its own, and
   earlier phases should unblock later ones (foundations/data model → core feature → secondary

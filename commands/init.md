@@ -8,6 +8,10 @@ argument-hint: [target directory; default = current repo root]
 Set up the current project (or **$ARGUMENTS**) for the compound loop. Idempotent — never
 overwrite a file that already exists; report what was created vs. skipped.
 
+> **Narrate each step (IN → DO → OUT).** For each file you scaffold, say in one line what you'll
+> create and why (`▶ DO …`), then whether it was created or skipped-because-it-exists (`✓ OUT …`),
+> so the scaffold is scannable without scrolling.
+
 The plugin ships the starting files under `${CLAUDE_PLUGIN_ROOT}/templates/`. Copy them in,
 then fill the placeholders from what you can learn about the repo (stack, test runner,
 domain). Create only what's missing:

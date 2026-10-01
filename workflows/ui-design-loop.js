@@ -66,12 +66,17 @@ const CRIT = {
   required: ['pass', 'score', 'issues'],
 }
 
+// Node narration: each node logs IN / DO before acting and OUT after — matches the IN→DO→OUT
+// convention in /oneshot-poc:run so the UI loop is observable in the progress narrator.
 // 1. INSPIRE — ground the look in real references (worker), write the design brief.
 phase('Inspire')
+log(`▶ IN  Inspire — app: ${TASK}; ${SCREENS.length} screen(s) to design`)
+log(`▶ DO  Inspire — ui-researcher (${WORKER}) web-searches real references → writes the design brief to ${BRIEF}`)
 await agent(
   `Find real web design inspiration for ${TASK} and write the design brief to ${BRIEF} (direction + named references, layout, color tokens, typography, components, do/don't, cited sources). ${RULES}`,
   { phase: 'Inspire', agentType: 'ui-researcher', model: WORKER },
 )
+log(`✓ OUT Inspire — design brief written to ${BRIEF} → start the apply/render/critique rounds`)
 
 // 2. Iterate: apply → render → Haiku critique.
 let lastIssues = null
@@ -80,12 +85,17 @@ for (let round = 1; round <= MAX; round++) {
   const fixNote = lastIssues && lastIssues.length
     ? ` Fix these issues from the last visual review: ${JSON.stringify(lastIssues)}.`
     : ''
+  log(`▶ IN  Apply (round ${round}/${MAX}) — the brief ${BRIEF}${lastIssues && lastIssues.length ? ` + ${lastIssues.length} issue(s) from last critique` : ''}`)
+  log(`▶ DO  Apply — builder (${BUILDER}) builds/restyles the screens to the brief`)
   await agent(
     `Apply the design brief ${BRIEF} to the UI — build/restyle the screens to match the direction, layout, color and type tokens.${fixNote} ${RULES}`,
     { phase: 'Apply', label: `apply:r${round}`, model: BUILDER },
   )
+  log(`✓ OUT Apply (round ${round}) — screens restyled → hand to Render`)
 
   phase('Render')
+  log(`▶ IN  Render (round ${round}) — ${SCREENS.length} screen(s), start: \`${START || '(none)'}\``)
+  log(`▶ DO  Render — worker (${WORKER}) starts the app + full-page screenshots each screen with Playwright`)
   const rendered = await agent(
     `Start the app with: \`${START}\` (in the background) and wait until it is ready. Then screenshot each screen ${JSON.stringify(SCREENS)} FULL-PAGE with the bundled Playwright (the oneshot-poc demo-video skill ships it under skills/demo-video/scripts/web; or \`npx playwright\`). Save each PNG to .oneshot/ui/round-${round}/<name>.png and return {shots:[{screen,path}]}. Stop the app afterwards. If it won't start or render, return an empty shots array with an error. ${RULES}`,
     { phase: 'Render', label: `render:r${round}`, model: WORKER, schema: SHOTS },
@@ -93,18 +103,26 @@ for (let round = 1; round <= MAX; round++) {
   const shots = (rendered && rendered.shots) || []
   if (!shots.length) {
     lastIssues = [{ severity: 'high', problem: `could not render the UI (${(rendered && rendered.error) || 'unknown'})`, fix: 'make the app start and the screens load, then re-render' }]
-    log(`UI round ${round}: render failed — ${(rendered && rendered.error) || 'no screenshots'}`)
+    log(`✓ OUT Render (round ${round}) — FAILED: ${(rendered && rendered.error) || 'no screenshots'} → retry Apply next round`)
     continue
   }
+  log(`✓ OUT Render (round ${round}) — ${shots.length} screenshot(s) captured → hand to Critique`)
 
   phase('Critique')
+  log(`▶ IN  Critique (round ${round}) — ${shots.length} screenshot(s) vs. the brief`)
+  log(`▶ DO  Critique — ui-reviewer (${CRITIC}, multimodal) looks at each screenshot and scores it`)
   const crit = await agent(
     `Look at these UI screenshots and score them against the design brief ${BRIEF}. READ each image path: ${JSON.stringify(shots)}. Be specific and decisive about real visual problems.`,
     { phase: 'Critique', label: `critique:r${round}`, agentType: 'ui-reviewer', model: CRITIC, schema: CRIT },
   )
-  log(`UI round ${round}: score ${crit ? crit.score : '?'}, ${crit && crit.issues ? crit.issues.length : 0} issues`)
-  if (crit && crit.pass) return { status: 'pass', round, score: crit.score, strengths: crit.strengths || [] }
+  const nIssues = crit && crit.issues ? crit.issues.length : 0
+  if (crit && crit.pass) {
+    log(`✓ OUT Critique (round ${round}) — PASS (score ${crit.score}) → return pass`)
+    return { status: 'pass', round, score: crit.score, strengths: crit.strengths || [] }
+  }
+  log(`✓ OUT Critique (round ${round}) — score ${crit ? crit.score : '?'}, ${nIssues} issue(s) → loop back to Apply`)
   lastIssues = (crit && crit.issues) || []
 }
 
+log(`✓ OUT ui-design-loop — ${MAX} round(s) done without a pass → return needs_work (${(lastIssues || []).length} remaining)`)
 return { status: 'needs_work', rounds: MAX, remaining: lastIssues || [] }

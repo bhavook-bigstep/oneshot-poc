@@ -115,7 +115,11 @@ const REVIEW_DIMS = [
   ['security', 'committed secrets, injection, unsafe deserialization, uncontrolled egress, missing input validation'],
 ]
 
+// Node narration: every node logs IN (what it received) and DO (what it will do) before acting,
+// and OUT (what it produced) after — so the run is observable in the progress narrator without
+// digging into agent transcripts. Mirrors the IN→DO→OUT convention in /oneshot-poc:run.
 phase('Brainstorm')
+log(`▶ IN  Brainstorm — scope: ${SCOPE}${A.feedback ? ` · gate feedback: ${A.feedback}` : ''}`)
 const focus = A.feedback
   ? `Incorporate this gate feedback as new/changed requirements: ${A.feedback}`
   : `the open requirements in ${SCOPE}`
@@ -125,6 +129,7 @@ const ANGLES = [
   'risk-first — attack the hardest / most uncertain parts',
   'robustness-first — edge cases, failure modes, operability',
 ]
+log(`▶ DO  Brainstorm — ${ANGLES.length} workers (${WORKER}) explore distinct angles → manager (${MANAGER}) synthesises one approach`)
 const proposals = (await parallel(
   ANGLES.map((angle, i) => () =>
     agent(
@@ -138,6 +143,7 @@ await agent(
   `Manager: from these ${proposals.length} candidate approaches, choose the best for the charter, graft the strongest ideas from the others, and state the trade-off and why. Then record the chosen approach in the ledger. Approaches:\n${JSON.stringify(proposals)}\n${LED}`,
   { phase: 'Brainstorm', label: 'manager:synthesize', model: MANAGER },
 )
+log(`✓ OUT Brainstorm — chosen approach recorded in the ledger from ${proposals.length} candidate(s) → hand to Plan`)
 
 let gaps = null
 for (let outer = 1; outer <= MAX_OUTER; outer++) {
@@ -145,15 +151,20 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
 
   phase('Plan')
   const planTarget = gaps ? `the remaining gaps: ${gaps.join('; ')}` : `every acceptance item in ${SCOPE}`
+  log(`▶ IN  Plan (outer ${outer}/${MAX_OUTER}) — target: ${planTarget}`)
+  log(`▶ DO  Plan — manager (${MANAGER}) writes/revises a concrete plan: files, dep graph, a test per acceptance item`)
   await agent(
     `Manager: write/revise a concrete plan for ${planTarget}. Charter: ${CHARTER}. Exact files/functions/config, the dependency graph (what can run in parallel on disjoint files), and a test per acceptance item. ${RULES} ${LED}`,
     { phase: 'Plan', label: 'manager:plan', model: MANAGER },
   )
+  log(`✓ OUT Plan — plan written to the ledger → hand to Implement`)
 
   // inner loop: implement → review → (fix / re-plan / clean)
   let rePlan = false
   for (let inner = 1; inner <= MAX_INNER; inner++) {
     phase('Implement')
+    log(`▶ IN  Implement (outer ${outer}, inner ${inner}/${MAX_INNER}) — the current plan for ${SCOPE}`)
+    log(`▶ DO  Implement — manager (${MANAGER}) decomposes into disjoint-file tasks → workers (${WORKER}) build → manager integrates + runs gates`)
     // MANAGER (Opus): break the plan into tasks, each owning a DISJOINT set of files.
     const breakdown = await agent(
       `Manager: read the current plan and ${CHARTER}, and break the implementation into small tasks, each owning a DISJOINT set of files (no two tasks touch the same file). Mark real dependencies in dependsOn; return dependent tasks already in dependency order. ${RULES}`,
@@ -179,10 +190,14 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
       { phase: 'Implement', label: 'manager:integrate', model: MANAGER, schema: IMPL },
     )
     if (impl && impl.blocked) {
+      log(`✓ OUT Implement — BLOCKED: ${impl.blocker || impl.summary} → return stuck`)
       return { status: 'stuck', stage: 'implement', blocker: impl.blocker || impl.summary, outer }
     }
+    log(`✓ OUT Implement — ${tasks.length} task(s) integrated, gates ${impl && impl.gatesPass ? 'PASS' : 'reported'} → hand to Review`)
 
     phase('Review')
+    log(`▶ IN  Review (outer ${outer}, inner ${inner}) — the current git diff`)
+    log(`▶ DO  Review — ${REVIEW_DIMS.length} reviewers (${REVIEWER}) in parallel: ${REVIEW_DIMS.map(([n]) => n).join(', ')}`)
     const reviews = (await parallel(
       REVIEW_DIMS.map(([name, scope]) => () =>
         agent(
@@ -193,13 +208,18 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
     )).filter(Boolean)
     const all = reviews.flatMap((r) => r.findings || [])
     const blocking = all.filter((f) => f.severity === 'P1' || f.severity === 'P2')
-    if (blocking.length === 0) break // clean → leave inner, go to acceptance
+    if (blocking.length === 0) {
+      log(`✓ OUT Review — clean (no P1/P2 across ${all.length} finding(s)) → hand to Acceptance`)
+      break // clean → leave inner, go to acceptance
+    }
 
     if (blocking.some((f) => f.needsDesignChange)) {
+      log(`✓ OUT Review — ${blocking.length} blocker(s), one needs a design change → re-plan (E→C)`)
       rePlan = true
       break // E→C: a design change is needed → re-plan (outer loop re-enters Plan)
     }
     // fix in place, then re-review (next inner iteration)
+    log(`✓ OUT Review — ${blocking.length} blocker(s), fixable in place → fix then re-review`)
     await agent(
       `Fix these review findings, then re-run the gates: ${JSON.stringify(blocking)}. ${RULES} ${LED}`,
       { phase: 'Review', label: 'review:fix', model: REVIEWER },
@@ -209,19 +229,26 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
   if (rePlan) continue // re-plan this outer iteration's work
 
   phase('Acceptance')
+  log(`▶ IN  Acceptance — the built product vs. every acceptance item in ${SCOPE}`)
+  log(`▶ DO  Acceptance — acceptance-reviewer (${REVIEWER}) reads + exercises each item (tests, CLI, headless browser for UI)`)
   const acc = await agent(
     `Verify the built product against EVERY acceptance item in ${SCOPE} (from ${CHARTER}), item by item. Read the code AND exercise it — run the tests, run the app/CLI, and for UI items drive a headless browser (the oneshot-poc demo-video skill bundles Playwright under its scripts/web — use record-lib or a plain Playwright script to click/assert). Mark each met / partial / missing / needs_human with evidence (file:line, test name, command+result, or the UI assertion). Do NOT perform destructive or outward-facing actions. ${LED}`,
     { phase: 'Acceptance', agentType: 'acceptance-reviewer', model: REVIEWER, schema: ACCEPT },
   )
   if (acc && acc.allMet) {
-    return { status: 'met', items: acc.items, outer, note: acc.items.filter((i) => i.verdict === 'needs_human').map((i) => i.id) }
+    const needsHuman = acc.items.filter((i) => i.verdict === 'needs_human').map((i) => i.id)
+    log(`✓ OUT Acceptance — ALL MET for ${SCOPE}${needsHuman.length ? ` (needs_human: ${needsHuman.join(', ')})` : ''} → return met`)
+    return { status: 'met', items: acc.items, outer, note: needsHuman }
   }
   const newGaps = (acc && acc.gaps) || ['acceptance review returned no structured result']
   // stuck-detector: identical gap set two outer loops running → escalate instead of spinning
   if (gaps && JSON.stringify(gaps.slice().sort()) === JSON.stringify(newGaps.slice().sort())) {
+    log(`✓ OUT Acceptance — same gaps persisted across a full outer loop → return stuck`)
     return { status: 'stuck', stage: 'acceptance', blocker: 'the same gaps persisted across a full outer loop', gaps: newGaps, outer }
   }
+  log(`✓ OUT Acceptance — not met; ${newGaps.length} gap(s): ${newGaps.join('; ')} → loop back to Plan`)
   gaps = newGaps
 }
 
+log(`✓ OUT build-loop — outer budget (${MAX_OUTER}) exhausted → return stuck`)
 return { status: 'stuck', stage: 'budget', blocker: `outer loop budget (${MAX_OUTER}) exhausted`, gaps, outer: MAX_OUTER }

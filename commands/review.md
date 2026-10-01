@@ -7,6 +7,10 @@ argument-hint: [target; default = git diff vs the base branch]
 
 Review the current changes (**$ARGUMENTS**, else `git diff` vs the base branch).
 
+> **Narrate each step (IN → DO → OUT).** Open each numbered step with one line of what it got and
+> what it will do (`▶ IN … / ▶ DO …`), and close it with one line of what it produced (`✓ OUT …`),
+> so intent is scannable without scrolling. Reporting only — inside `/oneshot-poc:run` it adds no pause.
+
 ## 1. Scope
 Compute changed files; detect affected areas; read the related plan in `docs/plans/` if any.
 
