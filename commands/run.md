@@ -54,10 +54,10 @@ A Requirement ─▶ ⏸ A2 Scope QA + REQUIREMENTS.md ─▶ A3 Phase plan (spl
                           ┌─ BUILD LOOP (scoped to Pn) ─────────────────────────┐        │
                           │  B Brainstorm → C Plan → [D Implement → E Review] → F Acceptance
                           │        ▲            ▲                        │                │
-                          │        │   (design change)──────────────────┘                │
-                          │        └──(Pn's items NOT met)── F                            │
+                          │        │   (gap / design change → re-plan)──┘                │
+                          │        └──(gaps persist / churn → re-brainstorm the approach)│
                           └───────────────────│(all Pn items met)──────────────┘         │
-                                   next phase ◀┘   (stuck → ⏸ STUCK: escalate, amend, resume)
+                                   next phase ◀┘   (budgets exhausted → ⏸ STUCK: escalate, amend, resume)
                                    └──────────── all phases met ───────────────────────────┘
                                                               │
                                                               ▼
@@ -113,17 +113,24 @@ and resume are enforced in code, and the loop only has to nail *this slice*:
 scriptPath: ${CLAUDE_PLUGIN_ROOT}/workflows/oneshot-build-loop.js
 args: { charter: "REQUIREMENTS.md", ledger: "<ledger path>", dir: ".",
         phase: { id: "P1", title: "…", items: [1, 2] },   // the current slice
-        maxOuter: 3, maxInner: 2, maxReplans: 2,
+        maxOuter: 3, maxInner: 2, maxReplans: 2, maxRebrainstorms: 1,
         feedback: <gate/STUCK feedback on a re-entry; else omit> }
 ```
 
 (Your running `/oneshot-poc:run` is the explicit opt-in to multi-agent orchestration. **Record the
 returned `runId` into the ledger** so a same-session resume can `resumeFromRunId`.) Each phase runs
 **B Brainstorm → C Plan → [ D Implement → E parallel Review → fix or re-plan ] → F Acceptance**
-*scoped to that phase's items*, looping `E→C` on design changes and `F→B` on unmet items — with
-hard **budgets** and a **stuck-detector**. Every node reads and appends to the ledger. Acceptance
-drives a headless browser for UI items (the demo-video skill's bundled Playwright). Per phase it
-returns exactly one of:
+*scoped to that phase's items*, with a three-rung **escalation ladder** so it self-corrects at the
+right level instead of spinning or over-thinking:
+- a review finding fixable in place → **fix + re-review** (inner loop), no re-plan;
+- a `needsDesignChange` finding or an acceptance gap → **E→C / F→C re-plan** (refine the plan, same
+  approach), bounded by `maxReplans`;
+- the **same gaps persist across a full loop**, or design changes keep churning → **F→B re-brainstorm**
+  (re-think the *approach*, not just the plan), bounded by `maxRebrainstorms`;
+- still failing after the last approach → **stuck** (human).
+
+Every node reads and appends to the ledger. Acceptance drives a headless browser for UI items (the
+demo-video skill's bundled Playwright). Per phase it returns exactly one of:
 
 - **`{status:'met', ...}`** — this phase's items are met. **Mark Pn `done`** in the ledger
   (phase plan + requirement rows + iteration log), capture non-trivial fixes with

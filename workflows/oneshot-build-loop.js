@@ -29,6 +29,10 @@ const MAX_INNER = A.maxInner || 2
 // Without this, repeated "needs a design change" findings bounce Plan↔Review and silently drain
 // MAX_OUTER before acceptance ever runs — returning a stuck with no gaps to report.
 const MAX_REPLANS = A.maxReplans || 2
+// Escalation ladder: when PLAN-level refinement can't close the gaps (persistent gaps or design
+// churn), the loop re-enters BRAINSTORM to re-think the approach — up to this many times before
+// escalating to a human stuck. The approach itself, not just the plan, gets a chance to change.
+const MAX_REBRAINSTORMS = A.maxRebrainstorms || 1
 // Build ONE phase at a time when a phase is passed (requirements split into slices); otherwise
 // the whole charter. Scoping keeps each loop focused — nail this slice, then take the next fresh.
 const PHASE = A.phase || null
@@ -122,35 +126,35 @@ const REVIEW_DIMS = [
   ['security', 'committed secrets, injection, unsafe deserialization, uncontrolled egress, missing input validation'],
 ]
 
-// Node narration: every node logs IN (what it received) and DO (what it will do) before acting,
-// and OUT (what it produced) after — so the run is observable in the progress narrator without
-// digging into agent transcripts. Mirrors the IN→DO→OUT convention in /oneshot-poc:run.
-phase('Brainstorm')
-log(`▶ IN  Brainstorm — scope: ${SCOPE}${A.feedback ? ` · gate feedback: ${A.feedback}` : ''}`)
-const focus = A.feedback
-  ? `Incorporate this gate feedback as new/changed requirements: ${A.feedback}`
-  : `the open requirements in ${SCOPE}`
-// WORKERS (Sonnet): each explores ONE approach from a distinct angle, in parallel.
+// Node narration: every node logs IN/DO before acting and OUT after — so the run is observable in
+// the progress narrator without digging into transcripts (mirrors IN→DO→OUT in /oneshot-poc:run).
+// Brainstorm is a FUNCTION so the escalation ladder can re-enter it mid-loop when the approach
+// itself (not just the plan) proves wrong.
 const ANGLES = [
   'MVP-first — the simplest design that satisfies the charter',
   'risk-first — attack the hardest / most uncertain parts',
   'robustness-first — edge cases, failure modes, operability',
 ]
-log(`▶ DO  Brainstorm — ${ANGLES.length} workers (${WORKER}) explore distinct angles → manager (${MANAGER}) synthesises one approach`)
-const proposals = (await parallel(
-  ANGLES.map((angle, i) => () =>
-    agent(
-      `Propose ONE approach for ${focus}, from this angle: ${angle}. Charter: ${CHARTER}. Attach a real cited source (web-searched) or the verbatim "No source found — this is an AI-generated idea." Give the core idea, why it fits the charter, rough effort, and the main risk. ${RULES}`,
-      { phase: 'Brainstorm', label: `approach:${i + 1}`, model: WORKER },
+async function runBrainstorm(focusText) {
+  phase('Brainstorm')
+  log(`▶ IN  Brainstorm — focus: ${focusText}`)
+  log(`▶ DO  Brainstorm — ${ANGLES.length} workers (${WORKER}) explore distinct angles → manager (${MANAGER}) synthesises one approach`)
+  // WORKERS (Sonnet): each explores ONE approach from a distinct angle, in parallel.
+  const proposals = (await parallel(
+    ANGLES.map((angle, i) => () =>
+      agent(
+        `Propose ONE approach for ${focusText}, from this angle: ${angle}. Charter: ${CHARTER}. Attach a real cited source (web-searched) or the verbatim "No source found — this is an AI-generated idea." Give the core idea, why it fits the charter, rough effort, and the main risk. ${RULES}`,
+        { phase: 'Brainstorm', label: `approach:${i + 1}`, model: WORKER },
+      ),
     ),
-  ),
-)).filter(Boolean)
-// MANAGER (Opus): synthesize — pick the best, graft the strongest ideas, state the trade-off.
-await agent(
-  `Manager: from these ${proposals.length} candidate approaches, choose the best for the charter, graft the strongest ideas from the others, and state the trade-off and why. Then record the chosen approach in the ledger. Approaches:\n${JSON.stringify(proposals)}\n${LED}`,
-  { phase: 'Brainstorm', label: 'manager:synthesize', model: MANAGER },
-)
-log(`✓ OUT Brainstorm — chosen approach recorded in the ledger from ${proposals.length} candidate(s) → hand to Plan`)
+  )).filter(Boolean)
+  // MANAGER (Opus): synthesize — pick the best, graft the strongest ideas, state the trade-off.
+  await agent(
+    `Manager: from these ${proposals.length} candidate approaches, choose the best for the charter, graft the strongest ideas from the others, and state the trade-off and why. Then record the chosen approach in the ledger. Approaches:\n${JSON.stringify(proposals)}\n${LED}`,
+    { phase: 'Brainstorm', label: 'manager:synthesize', model: MANAGER },
+  )
+  log(`✓ OUT Brainstorm — chosen approach recorded from ${proposals.length} candidate(s) → hand to Plan`)
+}
 
 // Diagnostics carried into every stuck return, so the orchestrator can report what happened
 // (met/partial/missing + what was tried) WITHOUT reading the journal. Never return a bare null.
@@ -158,12 +162,28 @@ let gaps = null
 let lastReview = null     // the blocking findings from the most recent review
 let lastAccept = null     // the most recent acceptance matrix (items + verdicts)
 let designToFix = null    // design-change findings to resolve on the next re-plan
-let rePlans = 0           // how many times we've re-planned on a design change
-const trail = []          // one line per outer-loop outcome — the "what was tried" record
-for (let outer = 1; outer <= MAX_OUTER; outer++) {
-  log(`Outer loop ${outer}/${MAX_OUTER}${gaps ? ` — closing gaps: ${gaps.join('; ')}` : ''}`)
+let rePlans = 0           // re-plans on a design change, within the current approach
+const trail = []          // one line per loop outcome — the "what was tried" record
 
-  phase('Plan')
+// Escalation ladder (approach loop): a small gap re-enters PLAN (inner outer loop); a persistent
+// gap or design churn re-enters BRAINSTORM here to re-think the approach; still failing → stuck.
+const MAX_APPROACHES = 1 + MAX_REBRAINSTORMS
+const initialFocus = A.feedback
+  ? `Incorporate this gate feedback as new/changed requirements: ${A.feedback}`
+  : `the open requirements in ${SCOPE}`
+let escalate = null // non-null → re-brainstorm with this context on the next approach
+
+for (let approach = 1; approach <= MAX_APPROACHES; approach++) {
+  await runBrainstorm(approach === 1 ? initialFocus
+    : `The previous approach did not get ${SCOPE} to pass (${escalate}). Explore a DIFFERENT approach — not a tweak of the last one — reusing only what demonstrably worked.`)
+  // reset per-approach state — a new approach gets fresh plan/build/verify attempts
+  gaps = null; rePlans = 0; designToFix = null; escalate = null
+  let reBrainstorm = false
+
+  for (let outer = 1; outer <= MAX_OUTER; outer++) {
+    log(`Approach ${approach}/${MAX_APPROACHES} · outer ${outer}/${MAX_OUTER}${gaps ? ` — closing gaps: ${gaps.join('; ')}` : ''}`)
+
+    phase('Plan')
   const planTarget = designToFix
     ? `REWORK the approach to resolve these design-change findings, then cover ${SCOPE}: ${designToFix.map((f) => f.issue).join('; ')}`
     : gaps ? `the remaining gaps: ${gaps.join('; ')}` : `every acceptance item in ${SCOPE}`
@@ -235,13 +255,20 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
       const design = blocking.filter((f) => f.needsDesignChange)
       rePlans++
       trail.push(`outer ${outer}: re-plan #${rePlans} on design change — ${design.map((f) => f.issue).join('; ')}`)
-      // Re-plan churn guard: if design changes keep forcing E→C past the budget, we'd never reach
-      // acceptance and would drain MAX_OUTER into a blank stuck. Escalate WITH the findings instead.
+      // Re-plan churn guard: if design changes keep forcing E→C past the budget, PLAN-level rework
+      // isn't working — re-think the whole approach (re-brainstorm) if budget remains, else stuck.
       if (rePlans > MAX_REPLANS) {
-        log(`✓ OUT Review — re-plan budget (${MAX_REPLANS}) exceeded on design churn → return stuck with findings`)
+        if (approach < MAX_APPROACHES) {
+          escalate = `the approach kept needing rework (design-change findings: ${design.map((f) => f.issue).join('; ')})`
+          trail.push(`approach ${approach}: design churn after ${rePlans - 1} re-plan(s) → re-brainstorm`)
+          log(`✓ OUT Review — design churn; re-plan budget (${MAX_REPLANS}) spent → RE-BRAINSTORM the approach`)
+          reBrainstorm = true
+          break // leave inner; the guard after the outer loop leaves the approach to re-brainstorm
+        }
+        log(`✓ OUT Review — design churn and no approaches left → return stuck with findings`)
         return {
           status: 'stuck', stage: 'design-churn',
-          blocker: `the approach kept needing rework — re-planned ${rePlans - 1}× on design-change findings without reaching acceptance`,
+          blocker: `the approach kept needing rework across ${MAX_APPROACHES} approach(es) — re-planned ${rePlans - 1}× without reaching acceptance`,
           gaps: design.map((f) => f.issue), findings: design, lastReview, lastAcceptance: lastAccept, trail, outer,
         }
       }
@@ -258,6 +285,7 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
     )
     if (inner === MAX_INNER) log(`Inner review budget reached (${MAX_INNER}); proceeding to acceptance with any residual P2s noted.`)
   }
+  if (reBrainstorm) break // the approach is wrong → leave the outer loop to re-brainstorm
   if (rePlan) continue // re-plan this outer iteration's work
 
   phase('Acceptance')
@@ -275,23 +303,41 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
   }
   const newGaps = (acc && acc.gaps && acc.gaps.length) ? acc.gaps : ['acceptance review returned no structured gap list']
   trail.push(`outer ${outer}: acceptance not met — ${newGaps.join('; ')}`)
-  // stuck-detector: identical gap set two outer loops running → escalate instead of spinning
+  // Persistent-gap detector: identical gaps across a full outer loop means PLAN-level refinement
+  // isn't closing them → re-think the approach (re-brainstorm) if budget remains, else stuck.
   if (gaps && JSON.stringify(gaps.slice().sort()) === JSON.stringify(newGaps.slice().sort())) {
-    log(`✓ OUT Acceptance — same gaps persisted across a full outer loop → return stuck`)
-    return { status: 'stuck', stage: 'acceptance', blocker: 'the same gaps persisted across a full outer loop', gaps: newGaps, lastReview, lastAcceptance: acc, trail, outer }
+    if (approach < MAX_APPROACHES) {
+      escalate = `the same gaps persisted across a full plan/build/verify loop: ${newGaps.join('; ')}`
+      trail.push(`approach ${approach}: gaps persisted → re-brainstorm`)
+      log(`✓ OUT Acceptance — same gaps persisted → RE-BRAINSTORM the approach`)
+      reBrainstorm = true
+      break // leave the outer loop to re-brainstorm
+    }
+    log(`✓ OUT Acceptance — same gaps persisted and no approaches left → return stuck`)
+    return { status: 'stuck', stage: 'acceptance', blocker: 'the same gaps persisted across approaches', gaps: newGaps, lastReview, lastAcceptance: acc, trail, outer }
   }
-  log(`✓ OUT Acceptance — not met; ${newGaps.length} gap(s): ${newGaps.join('; ')} → loop back to Plan`)
-  gaps = newGaps
-}
+    log(`✓ OUT Acceptance — not met; ${newGaps.length} gap(s): ${newGaps.join('; ')} → loop back to Plan`)
+    gaps = newGaps
+  } // end outer loop
 
-// Budget exhausted. NEVER return a bare null: fall back to acceptance gaps → unresolved design
+  if (reBrainstorm) continue // the approach was wrong → re-brainstorm (next approach iteration)
+
+  // Outer budget spent for THIS approach without a re-brainstorm trigger → re-think the approach
+  // if one remains; otherwise fall through to the final (genuine) budget stuck.
+  if (approach < MAX_APPROACHES) {
+    escalate = `${MAX_OUTER} plan/build/verify loops didn't close the gaps: ${(gaps || []).join('; ') || '(no gap list — likely design churn)'}`
+    trail.push(`approach ${approach}: outer budget (${MAX_OUTER}) exhausted → re-brainstorm`)
+    log(`Approach ${approach} exhausted its outer budget → RE-BRAINSTORM the approach`)
+    continue
+  }
+} // end approach loop
+
+// All approaches spent. NEVER return a bare null: fall back to acceptance gaps → unresolved design
 // findings → last review findings, so the stuck is always actionable without reading the journal.
 const finalGaps = gaps
   || (designToFix && designToFix.length ? designToFix.map((f) => f.issue) : null)
   || (lastReview && lastReview.length ? lastReview.map((f) => `${f.severity} ${f.file || ''}: ${f.issue}`) : null)
-  || ['outer budget exhausted before acceptance produced a gap list — likely repeated re-plans; see trail']
-const blocker = rePlans > 0 && !lastAccept
-  ? `outer budget (${MAX_OUTER}) exhausted while re-planning on design changes — acceptance never ran`
-  : `outer loop budget (${MAX_OUTER}) exhausted`
+  || ['budget exhausted before acceptance produced a gap list — likely repeated re-plans; see trail']
+const blocker = `exhausted ${MAX_APPROACHES} approach(es) × ${MAX_OUTER} loops without meeting ${SCOPE}`
 log(`✓ OUT build-loop — ${blocker} → return stuck (${finalGaps.length} gap(s))`)
 return { status: 'stuck', stage: 'budget', blocker, gaps: finalGaps, lastReview, lastAcceptance: lastAccept, trail, outer: MAX_OUTER }
