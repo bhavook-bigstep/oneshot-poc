@@ -10,14 +10,15 @@ agents checking the work, and finish with a demo video the user approves. This i
 self-correcting loop with **exactly two human gates** (⏸ G and ⏸ H).
 
 > ## RUN WITHOUT INTERRUPTION
-> The internal phases **B → C → D → E → F run back-to-back with NO stops, menus, questions, or
-> confirmation prompts.** Finishing one phase flows straight into the next; a loop-back (E→C,
-> F→B) re-enters immediately. The sub-commands you follow (`/oneshot-poc:brainstorm`, `:plan`,
-> `:implement`, `:review`) end with "decision menus / gates" — **ignore those while orchestrating;
-> they apply only when a phase is run standalone.** The **only** points you hand control to the
-> user are the two ⏸ gates (G: verify the product, H: approve the video). Everywhere else, keep
-> going on your own judgement. Never pause to ask "should I continue?" — the answer is always yes
-> until a ⏸ gate or a genuine blocker (an honest, retried gate failure) is reached.
+> You interact with the user at **exactly three points**: the up-front **scope QA (A2)** where
+> you clarify and confirm the charter, and the two gates **⏸ G** (verify the product) and
+> **⏸ H** (approve the video). **Everywhere else — the whole build loop B → C → D → E → F —
+> runs back-to-back with NO stops, menus, questions, or confirmation prompts.** Finishing one
+> phase flows straight into the next; a loop-back (E→C, F→B) re-enters immediately. The
+> sub-commands you follow (`/oneshot-poc:brainstorm`, `:plan`, `:implement`, `:review`) end with
+> "decision menus / gates" — **ignore those while orchestrating; they apply only standalone.**
+> Never pause mid-loop to ask "should I continue?" — the answer is always yes until A2's
+> confirmation, a ⏸ gate, or a genuine blocker (an honest, retried gate failure) is reached.
 
 > Keep a task list mirroring the state machine below. Track which requirements are met. Do not
 > declare "done" until the final user approval (Phase I). If a gate's feedback asks for changes,
@@ -27,33 +28,42 @@ self-correcting loop with **exactly two human gates** (⏸ G and ⏸ H).
 ## The state machine
 
 ```
-A REQUIREMENT ─▶ B BRAINSTORM ─▶ C PLAN ─▶ D IMPLEMENT ─▶ E CODE REVIEW
-                      ▲              ▲                          │
-                      │              └──────(problem found)─────┘
-                      │                                         │ (clean)
-                      │                                         ▼
-                      └────(requirements NOT met)──── F PRODUCT REVIEW
-                                                                │ (all met)
-                                                                ▼
-                                            ⏸ G VERIFY HANDOFF (user uses it + feedback)
-                                                                │
-                                      ┌──(feedback: changes)────┘
-                                      ▼                          │ (user approves)
-                                 (back to B)                     ▼
-                                                        ⏸ H DEMO VIDEO (user approves)
-                                                                │
-                                      ┌──(video: changes)───────┘
-                                      ▼                          │ (user approves)
-                                 (iterate H)                     ▼
-                                                             I FINISH
+A REQUIREMENT ─▶ ⏸ A2 SCOPE QA + CHARTER ─▶ B BRAINSTORM ─▶ C PLAN ─▶ D IMPLEMENT ─▶ E CODE REVIEW
+                   (clarify · confirm)           ▲             ▲                          │
+                                                 │             └──────(problem found)─────┘
+                                                 │                                         │ (clean)
+                                                 │                                         ▼
+                                                 └────(requirements NOT met)──── F PRODUCT REVIEW
+                                                                                           │ (all met)
+                                                                                           ▼
+                                                       ⏸ G VERIFY HANDOFF (user uses it + feedback)
+                                                                                           │
+                                                 ┌──(feedback: changes)────────────────────┘
+                                                 ▼                                          │ (user approves)
+                                            (back to B)                                     ▼
+                                                                                   ⏸ H DEMO VIDEO (approve)
+                                                                                           │
+                                                 ┌──(video: changes)───────────────────────┘
+                                                 ▼                                          │ (user approves)
+                                            (iterate H)                                     ▼
+                                                                                        I FINISH
 ```
 
-## A — Requirement
-Parse **$ARGUMENTS** (or the referenced doc) into an explicit, numbered **acceptance
-checklist**: every feature and requirement the product must satisfy, each testable. Restate
-it back. This checklist is the contract the loop runs against and the thing Phase F verifies.
-Write it to `docs/plans/<date>-requirements.md`. If the project isn't compound-ready (no
-`CLAUDE.md` + `.claude/rules/`), run `/oneshot-poc:init` first.
+## A — Requirement intake
+Read **$ARGUMENTS** (or the referenced requirements doc) and parse it into a draft list of
+every requirement/feature, marking each explicit vs. implied. If the project isn't
+compound-ready (no `CLAUDE.md` + `.claude/rules/`), run `/oneshot-poc:init` first.
+
+## ⏸ A2 — Scope QA & requirements charter (HUMAN — the one up-front gate)
+Before building, run `/oneshot-poc:scope`: sweep every requirement for ambiguity, flag
+anything **beyond a PoC** or contradictory, and **ask the user** a small batch of clear
+questions (each with a recommended default). Then write the **requirements charter** —
+`docs/plans/<date>-requirements-charter.md` — one row per decision with a one-line reason and a
+provenance tag: `[explicit]` (the user said it) · `[requirement]` (the doc states it
+explicitly) · `[inferred]` (you concluded it after careful consideration). The charter's
+**acceptance checklist** (the testable, in-scope items) is the contract the rest of the loop
+and the `acceptance-reviewer` (Phase F) run against. **Confirm the charter with the user**,
+fold in corrections — then proceed; this is the last interaction until ⏸ G.
 
 ## B — Brainstorm
 `/oneshot-poc:brainstorm` on the hardest parts: 2–4 approaches, each with a real citation or
@@ -75,8 +85,8 @@ auto-fix up to 2 attempts per gate. Report real output on failure — never fake
 re-review. Loop until the verdict is clean.
 
 ## F — Product review (every requirement met?)
-Spawn the `acceptance-reviewer` agent: go through the Phase A checklist item by item against
-the actually-built product (read the code, run the app/tests, exercise each feature) and mark
+Spawn the `acceptance-reviewer` agent: go through the charter's acceptance checklist (from A2)
+item by item against the actually-built product (read the code, run the app/tests, exercise each feature) and mark
 each **met / partial / missing** with evidence. **If anything is partial or missing, loop back
 to B (Brainstorm)** for that gap and run B→C→D→E→F again. Only when **every** item is met does
 the loop exit to G. Capture non-trivial fixes with `/oneshot-poc:compound`.

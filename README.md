@@ -16,6 +16,7 @@ deliver** — committing to a local branch and stopping before anything outward-
 **Commands** (`/oneshot-poc:<name>`)
 - `run` — the hands-off orchestrator (the one command)
 - `init` — scaffold a repo for the loop (CLAUDE.md, AGENTS.md, rules, solutions index)
+- `scope` — scope QA: clarify ambiguities + over-scope, then write a provenance-tagged requirements charter
 - `brainstorm` · `plan` · `implement` · `review` · `compound` · `create-pr` — the loop phases, individually
 
 **Agents** (`@agent-oneshot-poc:<name>`) — spawned in parallel during review
