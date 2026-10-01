@@ -13,13 +13,16 @@ model in a tight loop — not "the code looks fine," but a screenshot a critic s
 > will do (`▶ IN … / ▶ DO …`), and close it with what it produced (`✓ OUT …`). The workflow itself
 > narrates its own nodes (Inspire/Apply/Render/Critique) this way via `log()` — surface those.
 
-## 0. Ask for references first (before the loop)
-**Before starting the loop, ask the user for any design references to consider** — sites, products,
-brands, dribbble/awwwards links, screenshots, or a style described in words ("clean fintech
-dashboard like Stripe", "warm editorial"). Ask once, with a clear default: *"none — I'll ground the
-look in web-researched references for this product type."* Whatever they give becomes the **primary
-direction**; the researcher still web-searches to complement and validate it. (In `/oneshot-poc:run`
-this is the one place the UI step pauses — see the trigger section there.) Pass it as `references`.
+## 0. Get the references (no pause inside a run)
+The look is anchored on **design references** — sites, products, brands, dribbble/awwwards links,
+screenshots, or a style in words ("clean fintech dashboard like Stripe", "warm editorial").
+- **Inside `/oneshot-poc:run`:** these were already collected at **A2 scope QA** and live on the
+  charter's **UI references** line — read them from there and pass as `references`. Do **not** ask
+  again; the loop runs without a pause.
+- **Standalone `/oneshot-poc:ui`:** ask the user once, with the default *"none — I'll ground it in
+  web-researched references for this product type."*
+Whatever the references are, they become the **primary direction**; the researcher still
+web-searches to complement and validate them. Pass them as `references` (empty for the default).
 
 It runs as the bundled workflow. Gather the inputs, then invoke the **Workflow** tool:
 
@@ -59,6 +62,7 @@ high-severity issues) or `maxRounds` is hit (then it returns the remaining issue
 ## In `/oneshot-poc:run`
 The orchestrator triggers this from a **concrete signal**, not a guess: the charter's `UI surfaces`
 section (written by `/oneshot-poc:scope`). If that section lists any screen, the run — after all
-phases are functionally met — **asks the user for references**, then runs this loop over the
-`[UI]`-tagged acceptance items. If it says `None`, the loop is skipped. So there's always something
-to screenshot (features work first), and the look is made *good*, not just functional.
+phases are functionally met — runs this loop over the `[UI]`-tagged acceptance items, using the
+**UI references** the charter already captured at A2 scope QA (no extra pause). If it says `None`,
+the loop is skipped. So there's always something to screenshot (features work first), and the look
+is made *good*, not just functional.

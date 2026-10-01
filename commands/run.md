@@ -10,12 +10,11 @@ agents checking the work, and finish with a demo video the user approves. This i
 self-correcting loop with **exactly two human gates** (⏸ G and ⏸ H).
 
 > ## RUN WITHOUT INTERRUPTION
-> You interact with the user at **three fixed points**: the up-front **scope QA (A2)** where you
-> clarify and confirm the charter, and the two gates **⏸ G** (verify the product) and **⏸ H**
-> (approve the video) — **plus one conditional point**: a brief **UI-references ask** right before
-> the UI design loop, and only when the charter's *UI surfaces* section lists a screen. **Everywhere
-> else — the whole build loop B → C → D → E → F — runs back-to-back with NO stops, menus, questions,
-> or confirmation prompts.** Finishing one
+> You interact with the user at **exactly three points**: the up-front **scope QA (A2)** where you
+> clarify and confirm the charter (this is also where you collect any **UI design references**, if
+> the product has a UI), and the two gates **⏸ G** (verify the product) and **⏸ H** (approve the
+> video). **Everywhere else — the whole build loop B → C → D → E → F, and the UI design pass —
+> runs back-to-back with NO stops, menus, questions, or confirmation prompts.** Finishing one
 > phase flows straight into the next; a loop-back (E→C, F→B) re-enters immediately. The
 > sub-commands you follow (`/oneshot-poc:brainstorm`, `:plan`, `:implement`, `:review`) end with
 > "decision menus / gates" — **ignore those while orchestrating; they apply only standalone.**
@@ -62,7 +61,7 @@ A Requirement ─▶ ⏸ A2 Scope QA + REQUIREMENTS.md ─▶ A3 Phase plan (spl
                                    next phase ◀┘   (budgets exhausted → ⏸ STUCK: escalate, amend, resume)
                                    └──────────── all phases met ───────────────────────────┘
                                                               │
-                              charter UI surfaces? ──yes──▶ ⏸ ask references ─▶ UI DESIGN LOOP
+                              charter UI surfaces? ──yes──▶ UI DESIGN LOOP (refs from A2; no pause)
                                                               │ no / done              │
                                                               ▼◀──────────────────────┘
                        ⏸ G VERIFY (user uses it) ─▶ ⏸ H DEMO VIDEO (approve) ─▶ I FINISH
@@ -153,28 +152,24 @@ skill's bundled Playwright). Per phase it returns exactly one of:
   below and report from those fields. **Do NOT keep looping on your own, and do NOT read the journal
   to reconstruct what happened — the return already has it.**
 
-### All phases done — UI pass (conditional on the charter's signal)
+### All phases done — UI pass (conditional on the charter's signal, no pause)
 Every phase is `done`. **Read the charter's `UI surfaces` section** — the concrete signal `scope`
 wrote (don't re-judge from scratch). If it says **`None — no visual surface`**, skip this entirely
 and go straight to **⏸ G**. If it **lists any screen**, make the UI *intentional*, not just
-functional:
+functional — **without stopping** (the references were already gathered at A2):
 
-1. **⏸ Ask for references (the one conditional pause).** Ask the user, once, for any design
-   references to anchor the look — sites, products, brands, dribbble/awwwards links, screenshots, or
-   a style in words — with a clear default: *"none — I'll ground it in web-researched references for
-   this product type."* WAIT for the answer. (Skip the ask only if they already gave references at
-   A2 scope QA; reuse those.)
-2. **Run the UI design loop** — invoke `${CLAUDE_PLUGIN_ROOT}/workflows/ui-design-loop.js` with:
-   - `task` = what the app is · `brief` = `docs/design/ui-brief.md`,
-   - `screens` = the `[UI]`-tagged acceptance items mapped to their routes/URLs (from the UI surfaces
-     list), as `[{name, url}]`,
-   - `startCmd` = how the app starts on a local URL (from this run),
-   - `references` = the user's answer **verbatim** (empty string for the default),
-   - `maxRounds: 3`.
-   It grounds the look in those references and iterates with a Haiku visual critic on real
-   screenshots. (Separate top-level workflow — workflows can't nest.)
+**Run the UI design loop** — invoke `${CLAUDE_PLUGIN_ROOT}/workflows/ui-design-loop.js` with:
+- `task` = what the app is · `brief` = `docs/design/ui-brief.md`,
+- `screens` = the `[UI]`-tagged acceptance items mapped to their routes/URLs (from the UI surfaces
+  list), as `[{name, url}]`,
+- `startCmd` = how the app starts on a local URL (from this run),
+- `references` = the charter's **UI references** line **verbatim** (empty string for the `none —
+  web-researched` default),
+- `maxRounds: 3`.
 
-Set the checkpoint `next_node: VERIFY`, then go to **⏸ G**.
+It grounds the look in those references and iterates with a Haiku visual critic on real screenshots.
+(Separate top-level workflow — workflows can't nest.) Set the checkpoint `next_node: VERIFY`, then go
+to **⏸ G**.
 
 ### STUCK — the escape hatch (never spin forever)
 When a phase returns `stuck`, set the checkpoint `status: stuck`, stop the autonomy, and escalate

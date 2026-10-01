@@ -44,6 +44,13 @@ Put the ambiguities (step 2) and the scope flags (step 3) to the user as a **sma
 clear questions, each with a recommended default**. Ask only what changes the build — don't
 interrogate. Record the answers verbatim; they become `[explicit]` provenance.
 
+**If the product has a visual surface (step 3 found any UI), include one more question here: ask
+for design references to anchor the look** — sites, products, brands, dribbble/awwwards links,
+screenshots, or a style in words — with the default *"none — ground it in web-researched
+references for this product type."* This folds the UI-references ask into the single up-front QA
+so the build loop (including the UI design loop) runs with no further pause. Record the answer
+verbatim for the charter's **UI references** line.
+
 ## 5. Write the Requirements Charter — ALWAYS create `REQUIREMENTS.md`
 **Always** write **`REQUIREMENTS.md` at the repo root** (a top-level file, not under `docs/`).
 This is required on every run — no exceptions. Start it with a **version line**
@@ -69,7 +76,9 @@ Close the charter with four short sections:
 - **UI surfaces** — the concrete signal the orchestrator reads to decide whether to run the UI
   design loop. Either list each screen (`name — route/URL — one line on what it's for`), or write
   exactly **`None — no visual surface (CLI/API/library only)`**. Don't leave it blank or implied —
-  this is what `/oneshot-poc:run` keys off to shift attention to UI (and to screenshot).
+  this is what `/oneshot-poc:run` keys off to shift attention to UI (and to screenshot). When there
+  are screens, add a **UI references** line right under it = the user's answer from step 4 verbatim
+  (or `none — web-researched` for the default); the UI design loop reads this instead of asking again.
 - **Out of scope / deferred** — with the reason each was cut.
 - **Open assumptions** — anything you defaulted that the user didn't confirm, so it's visible.
 
