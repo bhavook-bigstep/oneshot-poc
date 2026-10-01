@@ -26,6 +26,9 @@ const MAX_INNER = A.maxInner || 2
 // (Sonnet) do the grunt exploration and implementation. Overridable via args.
 const MANAGER = A.managerModel || 'opus'
 const WORKER = A.workerModel || 'sonnet'
+// Reviewers + acceptance do the heavy lifting (running tests, driving a headless browser,
+// adversarial judgement), so they stay on the heavy model. Overridable via args.reviewerModel.
+const REVIEWER = A.reviewerModel || 'opus'
 const LED = `Read ${LEDGER} first for current state; append your phase's outcome to it when done (requirement-status matrix, phase, iteration, what changed). Never log secrets/PII.`
 const RULES = 'Follow the project CLAUDE.md + .claude/rules/ (already injected). Synthetic fixtures only; no secrets; deterministic.'
 
@@ -178,7 +181,7 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
       REVIEW_DIMS.map(([name, scope]) => () =>
         agent(
           `Review ONLY the current git diff for ${name}: ${scope}. ${RULES} Report concrete findings with file:line; set needsDesignChange=true when a fix requires reworking the approach, not a local edit.`,
-          { phase: 'Review', label: `review:${name}`, schema: FINDINGS },
+          { phase: 'Review', label: `review:${name}`, model: REVIEWER, schema: FINDINGS },
         ),
       ),
     )).filter(Boolean)
@@ -193,7 +196,7 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
     // fix in place, then re-review (next inner iteration)
     await agent(
       `Fix these review findings, then re-run the gates: ${JSON.stringify(blocking)}. ${RULES} ${LED}`,
-      { phase: 'Review', label: 'review:fix' },
+      { phase: 'Review', label: 'review:fix', model: REVIEWER },
     )
     if (inner === MAX_INNER) log(`Inner review budget reached (${MAX_INNER}); proceeding to acceptance with any residual P2s noted.`)
   }
@@ -202,7 +205,7 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
   phase('Acceptance')
   const acc = await agent(
     `Verify the built product against EVERY acceptance item in ${CHARTER}, item by item. Read the code AND exercise it — run the tests, run the app/CLI, and for UI items drive a headless browser (the oneshot-poc demo-video skill bundles Playwright under its scripts/web — use record-lib or a plain Playwright script to click/assert). Mark each met / partial / missing / needs_human with evidence (file:line, test name, command+result, or the UI assertion). Do NOT perform destructive or outward-facing actions. ${LED}`,
-    { phase: 'Acceptance', agentType: 'acceptance-reviewer', schema: ACCEPT },
+    { phase: 'Acceptance', agentType: 'acceptance-reviewer', model: REVIEWER, schema: ACCEPT },
   )
   if (acc && acc.allMet) {
     return { status: 'met', items: acc.items, outer, note: acc.items.filter((i) => i.verdict === 'needs_human').map((i) => i.id) }

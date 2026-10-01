@@ -10,8 +10,10 @@ Review the current changes (**$ARGUMENTS**, else `git diff` vs the base branch).
 ## 1. Scope
 Compute changed files; detect affected areas; read the related plan in `docs/plans/` if any.
 
-## 2. Spawn reviewers in parallel
-Launch concurrently with the Agent tool (include one only if its area changed):
+## 2. Spawn reviewers in parallel (heavy model)
+Reviewers do real heavy lifting — running the suite, driving a headless browser, adversarial
+judgement — so run them on the **heavy model (Opus)**, not a cheap worker tier. Launch
+concurrently with the Agent tool (include one only if its area changed):
 - `learnings-researcher` — relevant past solutions & gotchas
 - `code-quality-reviewer` — YAGNI, duplication, naming, readability, scope
 - `architecture-reviewer` — contracts, reproducibility, boundaries
