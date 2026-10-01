@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[oneshot-poc] Compound loop active. Search docs/solutions/INDEX.md before implementing; capture learnings with /oneshot-poc:compound. New project? /oneshot-poc:init. Build a PoC end-to-end: /oneshot-poc:run <goal>.'",
+            "outHandle": "print"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "echo '[oneshot-poc] If this commit fixed a non-trivial bug or shipped a feature, run /oneshot-poc:compound to capture the learning (docs/solutions/INDEX.md).'",
+            "outHandle": "print"
+          }
+        ]
+      }
+    ]
+  }
+}

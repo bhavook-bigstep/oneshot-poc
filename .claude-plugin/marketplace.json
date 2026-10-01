@@ -1,0 +1,17 @@
+{
+  "name": "oneshot-poc",
+  "owner": {
+    "name": "oneshot-poc"
+  },
+  "description": "One-shot a proof of concept end-to-end — brainstorm, plan, implement, multi-agent review, compound-docs, and a narrated live demo video.",
+  "version": "0.1.0",
+  "plugins": [
+    {
+      "name": "oneshot-poc",
+      "source": "./",
+      "description": "The /oneshot-poc:run hands-off PoC factory, its compound-loop commands, review agents, and the compound-docs + demo-video skills.",
+      "category": "productivity",
+      "tags": ["poc", "compound-engineering", "code-review", "demo-video", "agents"]
+    }
+  ]
+}

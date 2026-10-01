@@ -1,0 +1,10 @@
+{
+  "name": "oneshot-poc",
+  "version": "0.1.0",
+  "description": "One-shot a proof of concept end-to-end — brainstorm, plan, implement, multi-agent review, compound-docs, and a narrated live demo video — from a single hands-off command (/oneshot-poc:run).",
+  "author": {
+    "name": "oneshot-poc"
+  },
+  "license": "MIT",
+  "keywords": ["poc", "compound-engineering", "scaffold", "code-review", "demo-video", "agents"]
+}
