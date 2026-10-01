@@ -113,7 +113,8 @@ and resume are enforced in code, and the loop only has to nail *this slice*:
 scriptPath: ${CLAUDE_PLUGIN_ROOT}/workflows/oneshot-build-loop.js
 args: { charter: "REQUIREMENTS.md", ledger: "<ledger path>", dir: ".",
         phase: { id: "P1", title: "…", items: [1, 2] },   // the current slice
-        maxOuter: 3, maxInner: 2, feedback: <gate/STUCK feedback on a re-entry; else omit> }
+        maxOuter: 3, maxInner: 2, maxReplans: 2,
+        feedback: <gate/STUCK feedback on a re-entry; else omit> }
 ```
 
 (Your running `/oneshot-poc:run` is the explicit opt-in to multi-agent orchestration. **Record the
@@ -129,8 +130,13 @@ returns exactly one of:
   `/oneshot-poc:compound`, and **move to the next phase** (set `active_phase` to it, loop back to
   the top of B–F). When **Pn was the last phase**, all requirements are met → go to **All phases
   done** below.
-- **`{status:'stuck', stage, blocker, gaps}`** — a budget was hit or the same gaps persisted for
-  this phase → go to **STUCK** below. **Do NOT keep looping on your own.**
+- **`{status:'stuck', stage, blocker, gaps, lastReview, lastAcceptance, trail}`** — a budget was hit
+  (`stage: 'budget'`), the approach kept needing rework (`stage: 'design-churn'`), the same gaps
+  persisted (`stage: 'acceptance'`), or integration blocked (`stage: 'implement'`). The return
+  **always carries diagnostics** — `gaps` (never null), the `trail` of what was tried each loop, the
+  `lastAcceptance` matrix (met/partial/missing per item), and `lastReview` findings. → go to **STUCK**
+  below and report from those fields. **Do NOT keep looping on your own, and do NOT read the journal
+  to reconstruct what happened — the return already has it.**
 
 ### All phases done
 Every phase is `done`. **If the charter has any visual/UI requirement, now run the UI design loop**
@@ -140,12 +146,22 @@ on real screenshots. (Separate top-level workflow — workflows can't nest.) Set
 `next_node: VERIFY`, then go to **⏸ G**.
 
 ### STUCK — the escape hatch (never spin forever)
-When a phase returns `stuck`, set the checkpoint `status: stuck`, stop the autonomy, and escalate:
-say which phase, which of its items are unmet, **exactly what was tried**, and the specific
-decision you need (usually a scope cut or an approach change). WAIT. Treat the answer as charter
-input: **amend the charter** (and the phase plan if the slice itself was wrong), then re-invoke the
-build-loop workflow **for this phase** with the new `feedback`. (Because the ledger is the
-checkpoint, the user can also just re-run `/oneshot-poc:run` later and it resumes here.)
+When a phase returns `stuck`, set the checkpoint `status: stuck`, stop the autonomy, and escalate
+**using the diagnostics in the return** (don't spelunk the journal — it's all in the object):
+- **Which phase** and which of its items are unmet — from `lastAcceptance` (met / partial / missing)
+  when present; if `lastAcceptance` is null, say so plainly (acceptance never ran — the loop churned
+  on design changes), and report the `gaps`/`lastReview` findings instead of inventing a status.
+- **Exactly what was tried** — print the `trail` (one line per loop) and the `blocker`.
+- **The specific decision you need** — tailor it to `stage`: `design-churn` → the approach keeps
+  getting reworked, so propose a concrete simpler approach or a scope cut and ask which; `budget` →
+  more iterations vs. cut scope; `acceptance` → the persistent gap and how to close or drop it;
+  `implement` → the integration blocker.
+
+WAIT. Treat the answer as charter input: **amend the charter** (and the phase plan if the slice
+itself was wrong), then re-invoke the build-loop workflow **for this phase** with the new `feedback`
+(and, for a design-churn/budget stuck you judge solvable with more room, a raised `maxOuter`/
+`maxReplans`). (Because the ledger is the checkpoint, the user can also just re-run `/oneshot-poc:run`
+later and it resumes here.)
 
 ## ⏸ G — Verification handoff (HUMAN GATE)
 The product now meets the requirement on paper. **Stop and hand to the user:**

@@ -15,13 +15,20 @@ export const meta = {
 //   charter:   path to the requirements charter (the acceptance checklist lives here),
 //   ledger:    path to the run ledger to read-first / write-after every phase,
 //   dir:       project root, maxOuter (default 3), maxInner (default 2),
+//   maxReplans: design-change re-plan budget before escalating (default 2),
 //   feedback:  optional — gate feedback to fold in this invocation (re-entry),
 // }
+// Every stuck return carries diagnostics — {gaps, lastReview, lastAcceptance, trail} — so the
+// orchestrator reports what was built / tried / unmet without reading the run journal.
 const A = args || {}
 const CHARTER = A.charter || 'REQUIREMENTS.md'
 const LEDGER = A.ledger || 'docs/plans/run-ledger.md'
 const MAX_OUTER = A.maxOuter || 3
 const MAX_INNER = A.maxInner || 2
+// Re-plans (design-change E→C) have their OWN budget, separate from the outer acceptance budget.
+// Without this, repeated "needs a design change" findings bounce Plan↔Review and silently drain
+// MAX_OUTER before acceptance ever runs — returning a stuck with no gaps to report.
+const MAX_REPLANS = A.maxReplans || 2
 // Build ONE phase at a time when a phase is passed (requirements split into slices); otherwise
 // the whole charter. Scoping keeps each loop focused — nail this slice, then take the next fresh.
 const PHASE = A.phase || null
@@ -145,12 +152,22 @@ await agent(
 )
 log(`✓ OUT Brainstorm — chosen approach recorded in the ledger from ${proposals.length} candidate(s) → hand to Plan`)
 
+// Diagnostics carried into every stuck return, so the orchestrator can report what happened
+// (met/partial/missing + what was tried) WITHOUT reading the journal. Never return a bare null.
 let gaps = null
+let lastReview = null     // the blocking findings from the most recent review
+let lastAccept = null     // the most recent acceptance matrix (items + verdicts)
+let designToFix = null    // design-change findings to resolve on the next re-plan
+let rePlans = 0           // how many times we've re-planned on a design change
+const trail = []          // one line per outer-loop outcome — the "what was tried" record
 for (let outer = 1; outer <= MAX_OUTER; outer++) {
   log(`Outer loop ${outer}/${MAX_OUTER}${gaps ? ` — closing gaps: ${gaps.join('; ')}` : ''}`)
 
   phase('Plan')
-  const planTarget = gaps ? `the remaining gaps: ${gaps.join('; ')}` : `every acceptance item in ${SCOPE}`
+  const planTarget = designToFix
+    ? `REWORK the approach to resolve these design-change findings, then cover ${SCOPE}: ${designToFix.map((f) => f.issue).join('; ')}`
+    : gaps ? `the remaining gaps: ${gaps.join('; ')}` : `every acceptance item in ${SCOPE}`
+  designToFix = null // consumed into this plan
   log(`▶ IN  Plan (outer ${outer}/${MAX_OUTER}) — target: ${planTarget}`)
   log(`▶ DO  Plan — manager (${MANAGER}) writes/revises a concrete plan: files, dep graph, a test per acceptance item`)
   await agent(
@@ -208,13 +225,28 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
     )).filter(Boolean)
     const all = reviews.flatMap((r) => r.findings || [])
     const blocking = all.filter((f) => f.severity === 'P1' || f.severity === 'P2')
+    lastReview = blocking
     if (blocking.length === 0) {
       log(`✓ OUT Review — clean (no P1/P2 across ${all.length} finding(s)) → hand to Acceptance`)
       break // clean → leave inner, go to acceptance
     }
 
     if (blocking.some((f) => f.needsDesignChange)) {
-      log(`✓ OUT Review — ${blocking.length} blocker(s), one needs a design change → re-plan (E→C)`)
+      const design = blocking.filter((f) => f.needsDesignChange)
+      rePlans++
+      trail.push(`outer ${outer}: re-plan #${rePlans} on design change — ${design.map((f) => f.issue).join('; ')}`)
+      // Re-plan churn guard: if design changes keep forcing E→C past the budget, we'd never reach
+      // acceptance and would drain MAX_OUTER into a blank stuck. Escalate WITH the findings instead.
+      if (rePlans > MAX_REPLANS) {
+        log(`✓ OUT Review — re-plan budget (${MAX_REPLANS}) exceeded on design churn → return stuck with findings`)
+        return {
+          status: 'stuck', stage: 'design-churn',
+          blocker: `the approach kept needing rework — re-planned ${rePlans - 1}× on design-change findings without reaching acceptance`,
+          gaps: design.map((f) => f.issue), findings: design, lastReview, lastAcceptance: lastAccept, trail, outer,
+        }
+      }
+      designToFix = design // the next Plan reworks the approach to resolve these
+      log(`✓ OUT Review — ${blocking.length} blocker(s), design change (re-plan ${rePlans}/${MAX_REPLANS}) → re-plan (E→C)`)
       rePlan = true
       break // E→C: a design change is needed → re-plan (outer loop re-enters Plan)
     }
@@ -235,20 +267,31 @@ for (let outer = 1; outer <= MAX_OUTER; outer++) {
     `Verify the built product against EVERY acceptance item in ${SCOPE} (from ${CHARTER}), item by item. Read the code AND exercise it — run the tests, run the app/CLI, and for UI items drive a headless browser (the oneshot-poc demo-video skill bundles Playwright under its scripts/web — use record-lib or a plain Playwright script to click/assert). Mark each met / partial / missing / needs_human with evidence (file:line, test name, command+result, or the UI assertion). Do NOT perform destructive or outward-facing actions. ${LED}`,
     { phase: 'Acceptance', agentType: 'acceptance-reviewer', model: REVIEWER, schema: ACCEPT },
   )
+  lastAccept = acc
   if (acc && acc.allMet) {
     const needsHuman = acc.items.filter((i) => i.verdict === 'needs_human').map((i) => i.id)
     log(`✓ OUT Acceptance — ALL MET for ${SCOPE}${needsHuman.length ? ` (needs_human: ${needsHuman.join(', ')})` : ''} → return met`)
     return { status: 'met', items: acc.items, outer, note: needsHuman }
   }
-  const newGaps = (acc && acc.gaps) || ['acceptance review returned no structured result']
+  const newGaps = (acc && acc.gaps && acc.gaps.length) ? acc.gaps : ['acceptance review returned no structured gap list']
+  trail.push(`outer ${outer}: acceptance not met — ${newGaps.join('; ')}`)
   // stuck-detector: identical gap set two outer loops running → escalate instead of spinning
   if (gaps && JSON.stringify(gaps.slice().sort()) === JSON.stringify(newGaps.slice().sort())) {
     log(`✓ OUT Acceptance — same gaps persisted across a full outer loop → return stuck`)
-    return { status: 'stuck', stage: 'acceptance', blocker: 'the same gaps persisted across a full outer loop', gaps: newGaps, outer }
+    return { status: 'stuck', stage: 'acceptance', blocker: 'the same gaps persisted across a full outer loop', gaps: newGaps, lastReview, lastAcceptance: acc, trail, outer }
   }
   log(`✓ OUT Acceptance — not met; ${newGaps.length} gap(s): ${newGaps.join('; ')} → loop back to Plan`)
   gaps = newGaps
 }
 
-log(`✓ OUT build-loop — outer budget (${MAX_OUTER}) exhausted → return stuck`)
-return { status: 'stuck', stage: 'budget', blocker: `outer loop budget (${MAX_OUTER}) exhausted`, gaps, outer: MAX_OUTER }
+// Budget exhausted. NEVER return a bare null: fall back to acceptance gaps → unresolved design
+// findings → last review findings, so the stuck is always actionable without reading the journal.
+const finalGaps = gaps
+  || (designToFix && designToFix.length ? designToFix.map((f) => f.issue) : null)
+  || (lastReview && lastReview.length ? lastReview.map((f) => `${f.severity} ${f.file || ''}: ${f.issue}`) : null)
+  || ['outer budget exhausted before acceptance produced a gap list — likely repeated re-plans; see trail']
+const blocker = rePlans > 0 && !lastAccept
+  ? `outer budget (${MAX_OUTER}) exhausted while re-planning on design changes — acceptance never ran`
+  : `outer loop budget (${MAX_OUTER}) exhausted`
+log(`✓ OUT build-loop — ${blocker} → return stuck (${finalGaps.length} gap(s))`)
+return { status: 'stuck', stage: 'budget', blocker, gaps: finalGaps, lastReview, lastAcceptance: lastAccept, trail, outer: MAX_OUTER }
