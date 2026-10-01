@@ -18,7 +18,7 @@ export const meta = {
 //   feedback:  optional — gate feedback to fold in this invocation (re-entry),
 // }
 const A = args || {}
-const CHARTER = A.charter || 'docs/plans/requirements-charter.md'
+const CHARTER = A.charter || 'REQUIREMENTS.md'
 const LEDGER = A.ledger || 'docs/plans/run-ledger.md'
 const MAX_OUTER = A.maxOuter || 3
 const MAX_INNER = A.maxInner || 2

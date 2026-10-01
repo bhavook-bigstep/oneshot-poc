@@ -59,23 +59,25 @@ compound-ready (no `CLAUDE.md` + `.claude/rules/`), run `/oneshot-poc:init` firs
 ## ⏸ A2 — Scope QA & requirements charter (HUMAN — the one up-front gate)
 Before building, run `/oneshot-poc:scope`: sweep every requirement for ambiguity, flag
 anything **beyond a PoC** or contradictory, and **ask the user** a small batch of clear
-questions (each with a recommended default). Then write the **requirements charter** —
-`docs/plans/<date>-requirements-charter.md` — one row per decision with a one-line reason and a
-provenance tag: `[explicit]` (the user said it) · `[requirement]` (the doc states it
-explicitly) · `[inferred]` (you concluded it after careful consideration). The charter's
-**acceptance checklist** (the testable, in-scope items) is the contract the rest of the loop
-and the `acceptance-reviewer` (Phase F) run against. **Confirm the charter with the user**,
-fold in corrections — then proceed; this is the last interaction until ⏸ G.
+questions (each with a recommended default). **Then ALWAYS write the requirements charter as a
+real top-level file — `REQUIREMENTS.md` at the repo root** — one row per decision with a
+one-line reason and a provenance tag: `[explicit]` (the user said it) · `[requirement]` (the doc
+states it explicitly) · `[inferred]` (you concluded it after careful consideration). This file
+is mandatory on every run; do not proceed to the build loop until `REQUIREMENTS.md` exists on
+disk. Its **acceptance checklist** (the testable, in-scope items) is the contract the rest of
+the loop and the `acceptance-reviewer` run against. **Confirm the charter with the user**, fold
+in corrections — then proceed; this is the last interaction until ⏸ G.
 
 ## B–F — Autonomous build loop (run it as the Workflow engine)
 The whole build loop runs as the bundled **deterministic workflow**, so the fan-out, loop
 counting, budgets, and resume are enforced in code — not left to drift over a long run. First
-create the **run ledger** from `${CLAUDE_PLUGIN_ROOT}/templates/run-ledger.md` if it doesn't
-exist (`docs/plans/<date>-run-ledger.md`). Then invoke the **Workflow** tool with:
+confirm `REQUIREMENTS.md` exists (A2 must have written it), and create the **run ledger** from
+`${CLAUDE_PLUGIN_ROOT}/templates/run-ledger.md` if missing (`docs/plans/<date>-run-ledger.md`).
+Then invoke the **Workflow** tool with:
 
 ```
 scriptPath: ${CLAUDE_PLUGIN_ROOT}/workflows/oneshot-build-loop.js
-args: { charter: "<charter path>", ledger: "<ledger path>", dir: ".",
+args: { charter: "REQUIREMENTS.md", ledger: "<ledger path>", dir: ".",
         maxOuter: 3, maxInner: 2, feedback: <gate feedback on a re-entry; omit the first time> }
 ```
 

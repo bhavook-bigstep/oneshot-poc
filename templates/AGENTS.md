@@ -10,7 +10,7 @@ says how the loop runs and where the approval gates are.
 
 | Phase | Command | Produces |
 | --- | --- | --- |
-| Scope QA | `/oneshot-poc:scope` | a provenance-tagged requirements charter → `docs/plans/` |
+| Scope QA | `/oneshot-poc:scope` | a provenance-tagged requirements charter → `REQUIREMENTS.md` (always) |
 | Brainstorm | `/oneshot-poc:brainstorm` | 2–4 cited approaches → `docs/brainstorms/` |
 | Plan | `/oneshot-poc:plan` | a concrete plan → `docs/plans/` |
 | Implement | `/oneshot-poc:implement` | code + tests, gates passing |

@@ -9,6 +9,13 @@ Turn a raw requirement into a **confirmed, provenance-tagged charter** before an
 This is the one place up front where you **ask**; the build loop that follows does not. Be
 thorough here — a wrong assumption now costs a whole loop later.
 
+> **MANDATORY OUTPUT:** this phase MUST end by writing a real file — **`REQUIREMENTS.md` at the
+> repo root** — that lists every requirement, its decision, and a provenance-tagged reason.
+> Writing it to disk is the deliverable of this phase, not an optional nicety. Do not describe
+> it only in chat, do not bury it under `docs/`, and do not proceed to brainstorm until the file
+> exists. If you somehow reach the build loop without `REQUIREMENTS.md` on disk, stop and write
+> it first.
+
 ## 1. Parse
 From **$ARGUMENTS** (the goal or the referenced requirements doc), extract every requirement
 and feature into a draft list. Mark each as stated-explicitly vs. implied.
@@ -33,9 +40,10 @@ Put the ambiguities (step 2) and the scope flags (step 3) to the user as a **sma
 clear questions, each with a recommended default**. Ask only what changes the build — don't
 interrogate. Record the answers verbatim; they become `[explicit]` provenance.
 
-## 5. Write the Requirements Charter — the initial standing
-Write `docs/plans/<YYYY-MM-DD>-requirements-charter.md`, starting with a **version line**
-(`Charter v1 · <date>`) — it is a **living document**: STUCK answers and gate feedback amend it
+## 5. Write the Requirements Charter — ALWAYS create `REQUIREMENTS.md`
+**Always** write **`REQUIREMENTS.md` at the repo root** (a top-level file, not under `docs/`).
+This is required on every run — no exceptions. Start it with a **version line**
+(`Charter v1 · <date>`); it is a **living document**: STUCK answers and gate feedback amend it
 (new/changed rows tagged `[explicit – feedback]`, version bumped), and the `acceptance-reviewer`
 always checks against the current version. A table, one row per requirement/decision:
 

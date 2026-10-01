@@ -4,7 +4,7 @@ Durable state for a `/oneshot-poc:run`. **Every phase reads this first and appen
 done**, so a context compaction or a resume never loses the thread, and the human can glance at
 progress. Content-free: status and decisions only, never secrets/PII.
 
-- **Charter:** `docs/plans/<date>-requirements-charter.md`  ·  **Branch:** `<feature-branch>`
+- **Charter:** `REQUIREMENTS.md` (top-level, always present)  ·  **Branch:** `<feature-branch>`
 - **Current phase:** `<A2 | B | C | D | E | F | G | H | I | STUCK>`
 - **Outer loop:** `<n>/<maxOuter>`  ·  **Inner loop:** `<n>/<maxInner>`
 
