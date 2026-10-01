@@ -62,9 +62,14 @@ always checks against the current version. A table, one row per requirement/deci
 - **Why:** one line. For `[inferred]`, give the basis ("the goal implies a UI, so a reviewer
   needs a list view"); for `[explicit]`/`[requirement]`, point to what was said.
 
-Close the charter with three short sections:
+Close the charter with four short sections:
 - **Acceptance checklist** — the testable, in-scope items only. This is the contract the build
-  loop and the `acceptance-reviewer` run against.
+  loop and the `acceptance-reviewer` run against. **Mark each item that has a visual surface with
+  a `[UI]` tag**, so the UI design loop knows which items to make *good*, not just functional.
+- **UI surfaces** — the concrete signal the orchestrator reads to decide whether to run the UI
+  design loop. Either list each screen (`name — route/URL — one line on what it's for`), or write
+  exactly **`None — no visual surface (CLI/API/library only)`**. Don't leave it blank or implied —
+  this is what `/oneshot-poc:run` keys off to shift attention to UI (and to screenshot).
 - **Out of scope / deferred** — with the reason each was cut.
 - **Open assumptions** — anything you defaulted that the user didn't confirm, so it's visible.
 

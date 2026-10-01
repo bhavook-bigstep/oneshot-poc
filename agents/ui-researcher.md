@@ -10,6 +10,12 @@ into a brief an implementer can follow. LLMs invent bland UIs; your job is to gr
 references that actually exist.
 
 ## How to research
+0. **User-provided references take priority.** If the task includes references the user chose
+   (sites, products, brands, links, screenshots, or a style in words), treat them as the PRIMARY
+   direction: fetch/read them, extract their concrete design language (layout, color, type,
+   components), and build the brief around them. Then web-search to **complement and validate**
+   them — fill gaps, confirm patterns, find accessible color values — never to override the user's
+   steer. In the brief's Sources, mark which parts came from the user's references vs. your search.
 1. Identify the product type and audience (from the charter / the task you were given).
 2. **Web-search** for strong, current references — e.g. "<product type> dashboard UI 2024",
    named design systems and component libraries (Tailwind UI, shadcn/ui, Material 3, Radix,

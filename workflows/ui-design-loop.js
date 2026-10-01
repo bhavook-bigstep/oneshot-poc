@@ -15,6 +15,9 @@ export const meta = {
 //   brief:    design-brief path (default docs/design/ui-brief.md),
 //   screens:  [{ name, url }] to screenshot,
 //   startCmd: shell command that starts the app on a local URL,
+//   references: optional — user-provided inspiration to anchor the look (sites/brands/products,
+//              URLs, screenshots, or a style in words). The researcher treats these as the PRIMARY
+//              direction and web-searches to complement/validate them.
 //   maxRounds (default 3), builderModel (default 'opus'), criticModel (default 'haiku'),
 //   workerModel (default 'sonnet') }
 const A = args || {}
@@ -22,6 +25,7 @@ const TASK = A.task || 'the application'
 const BRIEF = A.brief || 'docs/design/ui-brief.md'
 const SCREENS = A.screens || []
 const START = A.startCmd || ''
+const REFERENCES = (A.references || '').toString().trim()
 const MAX = A.maxRounds || 3
 const BUILDER = A.builderModel || 'opus' // UI implementation — heavy model, LLMs are weak here
 const CRITIC = A.criticModel || 'haiku' // fast multimodal visual check
@@ -70,10 +74,13 @@ const CRIT = {
 // convention in /oneshot-poc:run so the UI loop is observable in the progress narrator.
 // 1. INSPIRE — ground the look in real references (worker), write the design brief.
 phase('Inspire')
-log(`▶ IN  Inspire — app: ${TASK}; ${SCREENS.length} screen(s) to design`)
-log(`▶ DO  Inspire — ui-researcher (${WORKER}) web-searches real references → writes the design brief to ${BRIEF}`)
+log(`▶ IN  Inspire — app: ${TASK}; ${SCREENS.length} screen(s)${REFERENCES ? ' · user references provided' : ' · no user references (web only)'}`)
+log(`▶ DO  Inspire — ui-researcher (${WORKER}) ${REFERENCES ? 'starts from the user references, then web-searches to complement' : 'web-searches real references'} → writes the design brief to ${BRIEF}`)
+const refNote = REFERENCES
+  ? `The user provided these references to anchor the look — treat them as the PRIMARY direction, extract their concrete design language (layout, color, type, components), and web-search to complement and validate (never override) them: ${REFERENCES}. `
+  : ''
 await agent(
-  `Find real web design inspiration for ${TASK} and write the design brief to ${BRIEF} (direction + named references, layout, color tokens, typography, components, do/don't, cited sources). ${RULES}`,
+  `${refNote}Find real web design inspiration for ${TASK} and write the design brief to ${BRIEF} (direction + named references, layout, color tokens, typography, components, do/don't, cited sources). ${REFERENCES ? 'Record which parts of the brief come from the user references vs. web research. ' : ''}${RULES}`,
   { phase: 'Inspire', agentType: 'ui-researcher', model: WORKER },
 )
 log(`✓ OUT Inspire — design brief written to ${BRIEF} → start the apply/render/critique rounds`)
